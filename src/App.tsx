@@ -1,3 +1,6 @@
+import { parseIntent, type Intent } from "./cdui/intent";
+
+
 import React, { useState } from "react";
 import "./App.css";
 
@@ -132,8 +135,9 @@ type Mode = "ui" | "chat";
 
 function App() {
   const [mode, setMode] = useState<Mode>("ui");
-  const [currentScreen, setCurrentScreen] =
-    useState<ScreenDescription>(homeScreen);
+  const [history, setHistory] = useState<ScreenDescription[]>([homeScreen]);
+  const currentScreen = history[history.length - 1];
+
 
   const [chatInput, setChatInput] = useState("");
   const [systemPrompt, setSystemPrompt] = useState(
@@ -165,43 +169,58 @@ function App() {
    * Decide which screen to show based on the user's text command.
    * This is our "mock AI" for now.
    */
-  const handleCommand = (text: string) => {
-    const normalized = text.toLowerCase().trim();
+ const handleCommand = (text: string) => {
+  const intent: Intent = parseIntent(text);
 
-    if (!normalized) {
-      setSystemPrompt("Say something like 'java projects', 'backend', or 'cv'.");
-      return;
-    }
-
-    if (normalized.includes("java")) {
-      setCurrentScreen(javaScreen);
-      setSystemPrompt("Showing Java-heavy projects. What next?");
-      setMode("ui");
-      setChatInput("");
-      return;
-    }
-
-    if (normalized.includes("backend")) {
-      setCurrentScreen(backendScreen);
-      setSystemPrompt("Backend-focused view loaded. You can refine it again.");
-      setMode("ui");
-      setChatInput("");
-      return;
-    }
-
-    if (normalized.includes("cv") || normalized.includes("curriculum")) {
-      setCurrentScreen(cvScreen);
+  switch (intent.type) {
+    case "SHOW_CV": {
+      setHistory((prev) => [...prev, cvScreen]);
       setSystemPrompt("CV section opened. You can request other views anytime.");
       setMode("ui");
       setChatInput("");
       return;
     }
 
-    // Fallback: we don't know what they mean yet.
-    setSystemPrompt(
-      "I'm not sure what you mean. Try 'java projects', 'backend projects', or 'cv'."
-    );
-  };
+    case "SHOW_PROJECTS": {
+      let nextScreen: ScreenDescription = homeScreen;
+
+      if (intent.tech === "java") {
+        nextScreen = javaScreen;
+      } else if (intent.tech === "backend" || intent.tech === "firebase") {
+        // For now backend + firebase both go to backendScreen
+        nextScreen = backendScreen;
+      }
+
+      setHistory((prev) => [...prev, nextScreen]);
+      setSystemPrompt("View updated. You can refine it again.");
+      setMode("ui");
+      setChatInput("");
+      return;
+    }
+
+    case "GO_BACK": {
+      setHistory((prev) => {
+        if (prev.length <= 1) return prev; // already at root
+        const copy = [...prev];
+        copy.pop();
+        return copy;
+      });
+      setSystemPrompt("Went back to the previous view.");
+      setMode("ui");
+      setChatInput("");
+      return;
+    }
+
+    case "UNKNOWN":
+    default: {
+      setSystemPrompt(
+        "I'm not sure what you mean. Try phrases like 'java projects', 'backend projects', 'firebase projects', 'cv', or 'go back'."
+      );
+      return;
+    }
+  }
+};
+
 
   const handleChatSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
     e.preventDefault();
