@@ -1,73 +1,129 @@
-# React + TypeScript + Vite
+# Conversational Portfolio — CDUI Runtime
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Status:** Work in progress  
+**Author:** Admir Sabanovic  
+**Repository:** Private Intellectual Property (NOT Open Source)
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🚀 What is this?
 
-## React Compiler
+This project is an experimental **Conversational Driven User Interface (CDUI)** that replaces traditional website navigation with a **conversation-powered UI runtime**.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Instead of clicking menus, links, or navigating through predefined pages, users explore the system by **talking to it**. The interface is dynamically generated based on user intent and context — each screen exists only because the user asked for it.
 
-## Expanding the ESLint configuration
+There is **no navbar**, no sitemap, and no static page structure.  
+The UI emerges from the conversation itself.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+---
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## 🧠 CDUI — Conversational Driven User Interface
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+> CDUI is a new UX paradigm where the UI is *not predesigned* — it is **constructed in real time** from user intent.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+### Core principles
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+- **Conversation replaces navigation**
+- **UI is data, not markup**
+- **AI describes screens — runtime renders them**
+- **User intent dictates the interface**
+- **Clarification over guessing** (the system asks when ambiguous)
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### CDUI vs. traditional web UX
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+| Traditional Website | CDUI Runtime |
+|--------------------|-------------|
+| User adapts to the interface | Interface adapts to the user |
+| Static pages and routes | No routes — conversational states |
+| Navigation bar, sitemap, prebuilt layout | Nothing until requested |
+| Hierarchy and menus | Intent-driven rendering |
+| Predesigned UX flows | Responsive and emergent interaction |
+
+---
+
+## 🏗️ Why even bother?
+
+Web navigation has barely evolved since the 1990s. Despite advances in computing, we still force users to:
+
+- locate information manually  
+- understand page hierarchies  
+- follow rigid paths designed by someone else  
+
+This is a **legacy constraint**, not a natural law.
+
+Information systems should adapt to humans — **not the other way around**.
+
+There is a growing necessity to **disrupt traditional webpage layout patterns** and reconsider the role of UI entirely. Instead of a fixed structure waiting to be discovered, the interface can be:
+
+- **summoned** when needed  
+- **shaped** by context  
+- **negotiated** through language  
+- **dynamic**, not static
+
+The **CDUI runtime** explores this shift:
+
+- away from menus, navbars, and routing
+- toward **intent → interpretation → interface**
+
+It treats the UI as a **living, conversational entity** rather than a static destination.
+
+---
+
+## ⚠️ Intellectual Property Notice
+
+The **CDUI concept, runtime, schema, and conversational UI architecture** are:
+
+> **Private intellectual property of Admir Sabanovic**  
+> **NOT open source**  
+> **NOT licensed for reuse, replication, or derivative works**  
+
+Reading this repository is permitted for evaluation and inspiration.  
+Copying the CDUI paradigm, schema, structure, or implementation — in whole or in part — without written consent is **strictly prohibited**.
+
+This document serves as a **white-page notice** asserting ownership of:
+
+- the CDUI term in context of dynamic conversational UIs  
+- the runtime model  
+- the interaction architecture  
+- the fundamental idea of UI negotiation via structured AI output
+
+---
+
+## 📌 Current Roadmap (MVP)
+
+- [ ] React + TypeScript scaffold
+- [ ] CDUI screen schema (`ScreenDescription`, `Widget`, `Action`)
+- [ ] Renderer that materializes screens from JSON
+- [ ] Chat panel with message memory
+- [ ] Screen history (home/back)
+- [ ] Clarification logic on ambiguous user intent
+- [ ] Portfolio dataset (projects, tech stacks, experience)
+- [ ] Polished example flows demonstrating concept
+
+---
+
+## 🛠️ Planned Tech Stack
+
+- **React + TypeScript**
+- **Vite** development environment
+- **Custom CDUI Runtime**
+- Mock AI → later real LLM integration
+
+Optional later:
+
+- Voice input/output
+- Avatar with conversational states
+- Electron/Tauri shell
+- Advanced widgets (timeline, skill matrix, relationship graph)
+
+---
+
+## 👁️ Final Note
+
+This is not a website.
+
+It is a **prototype of a post-navigation world**, where interfaces no longer need menus, routes, or predesigned paths. It challenges the assumption that users should learn how to use software — instead, software should learn how to respond to users.
+
+**CDUI is a step toward interfaces that shape themselves around conversation.**
+
+Stay tuned.
