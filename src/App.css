@@ -1,0 +1,94 @@
+/* Make the app fill the viewport */
+#root {
+  height: 100vh;
+}
+
+/* Fullscreen CDUI UI mode */
+.ui-fullscreen {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Fullscreen chat mode */
+.chat-fullscreen {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #050816;
+  color: #f5f5f5;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+.chat-box {
+  max-width: 700px;
+  width: 100%;
+  padding: 2rem;
+  border-radius: 1rem;
+  background: #111827;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.chat-label {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  color: #9ca3af;
+  margin-bottom: 0.25rem;
+}
+
+.chat-system {
+  font-size: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.chat-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.chat-input {
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid #4b5563;
+  background: #020617;
+  color: #f9fafb;
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: #60a5fa;
+}
+
+.chat-buttons {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.chat-buttons button {
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+}
+
+.chat-buttons button[type="submit"] {
+  background: #2563eb;
+  color: white;
+}
+
+.chat-buttons button[type="button"] {
+  background: #374151;
+  color: #e5e7eb;
+}
+
+/* Remove bullets for project list */
+ul {
+  list-style-type: none;
+  padding-left: 0;
+}
