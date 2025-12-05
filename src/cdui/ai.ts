@@ -1,25 +1,78 @@
-import type { ScreenDescription } from "./types";
 import { parseIntent, type Intent } from "./intent";
-
-// We need access to the predefined screens:
 import {
-    homeScreen,
-    javaScreen,
-    backendScreen,
-    cvScreen,
-  } from "./screens";
-  
+  homeScreen,
+  javaScreen,
+  backendScreen,
+  cvScreen,
+} from "./screens";
+import type { ScreenDescription } from "./types";
 
 /**
  * Result of "thinking" about a user command.
  *
  * - "push": show a new screen on top of history
  * - "noop": no navigation, just update the system message
- * - "pop": handled in App for GO_BACK (we keep that logic there)
  */
 export type AIResult =
   | { kind: "push"; screen: ScreenDescription; systemPrompt?: string }
   | { kind: "noop"; systemPrompt: string };
+
+// --- Small helpers -------------------------------------------------
+
+function currentScreen(history: ScreenDescription[]): ScreenDescription {
+  return history[history.length - 1];
+}
+
+function screenLabel(screen: ScreenDescription): string {
+  switch (screen.screenId) {
+    case "home":
+      return "the main portfolio overview";
+    case "java_projects":
+      return "the Java-focused projects view";
+    case "backend_projects":
+      return "the backend-oriented projects view";
+    case "cv_download":
+      return "the CV download page";
+    default:
+      return "this view";
+  }
+}
+
+function nextActionsHint(screen: ScreenDescription): string {
+  const base =
+    'You can ask for "java projects", "backend projects", "firebase projects", "cv", say "go back", or ask for "something else".';
+
+  switch (screen.screenId) {
+    case "home":
+      return (
+        "You are seeing all highlighted projects. " +
+        "You can narrow it down to Java or backend work, or jump to the CV. " +
+        base
+      );
+    case "java_projects":
+      return (
+        "You are currently seeing only Java work. " +
+        "You can switch to backend projects, show the full list again, or open the CV. " +
+        base
+      );
+    case "backend_projects":
+      return (
+        "You are currently seeing backend-oriented work (CLI, fullstack, Firebase). " +
+        "You can switch to Java projects, show everything, or open the CV. " +
+        base
+      );
+    case "cv_download":
+      return (
+        "You are on the CV download page. " +
+        "You can ask to see Java projects, backend projects, or return to the main overview. " +
+        base
+      );
+    default:
+      return base;
+  }
+}
+
+// --- Main decision function ----------------------------------------
 
 /**
  * Decide what to do with a text command.
@@ -30,41 +83,61 @@ export function decideFromText(
   history: ScreenDescription[]
 ): AIResult {
   const intent: Intent = parseIntent(text);
+  const current = currentScreen(history);
 
   switch (intent.type) {
     case "SHOW_CV": {
       return {
         kind: "push",
         screen: cvScreen,
-        systemPrompt: "CV section opened. You can request other views anytime.",
+        systemPrompt:
+          "Opening the CV section. Here you will later get a real PDF on demand. " +
+          nextActionsHint(cvScreen),
       };
     }
 
     case "SHOW_PROJECTS": {
       let nextScreen: ScreenDescription = homeScreen;
+      let label = "all highlighted projects";
 
       if (intent.tech === "java") {
         nextScreen = javaScreen;
+        label = "Java-focused projects";
       } else if (
         intent.tech === "backend" ||
         intent.tech === "firebase"
       ) {
         nextScreen = backendScreen;
+        label = "backend-oriented projects";
       }
 
       return {
         kind: "push",
         screen: nextScreen,
-        systemPrompt: "View updated. You can refine it again.",
+        systemPrompt:
+          `Showing ${label}. ` +
+          nextActionsHint(nextScreen),
       };
     }
 
     case "SHOW_ANY_PROJECTS": {
-      // For now, "something else" just pushes the backend screen.
+      // Simple cycle: home → backend → java → home ...
+      let nextScreen: ScreenDescription;
+
+      if (current.screenId === "home") {
+        nextScreen = backendScreen;
+      } else if (current.screenId === "backend_projects") {
+        nextScreen = javaScreen;
+      } else {
+        nextScreen = homeScreen;
+      }
+
       return {
         kind: "push",
-        screen: backendScreen,
-        systemPrompt: "Here is another example from the portfolio.",
+        screen: nextScreen,
+        systemPrompt:
+          "Showing another perspective on the portfolio. " +
+          nextActionsHint(nextScreen),
       };
     }
 
@@ -73,7 +146,9 @@ export function decideFromText(
       return {
         kind: "noop",
         systemPrompt:
-          "I'm not sure what you mean. Try phrases like 'java projects', 'backend projects', 'firebase projects', 'cv', or 'go back'.",
+          `I didn't fully understand that. Right now you are on ${screenLabel(
+            current
+          )}. ` + nextActionsHint(current),
       };
     }
   }
