@@ -3,8 +3,10 @@
 export type Intent =
   | { type: "SHOW_PROJECTS"; tech?: string }
   | { type: "SHOW_CV" }
+  | { type: "SHOW_ANY_PROJECTS" }
   | { type: "GO_BACK" }
   | { type: "UNKNOWN"; reason?: string };
+  
 
   function hasAny(text: string, candidates: string[]): boolean {
     return candidates.some((word) => text.includes(word));
@@ -55,6 +57,22 @@ export function parseIntent(input: string): Intent {
   if (mentionsProjects || (soundsLikeShow && tech)) {
     return { type: "SHOW_PROJECTS", tech };
   }
+
+  // --- Show something else / next thing ---
+if (
+  hasAny(text, [
+    "something else",
+    "anything else",
+    "more projects",
+    "more work",
+    "show more",
+    "next",
+    "next project",
+    "next portfolio item"
+  ])
+) {
+  return { type: "SHOW_ANY_PROJECTS" };
+}
 
   // Fallback
   return { type: "UNKNOWN", reason: "no match" };

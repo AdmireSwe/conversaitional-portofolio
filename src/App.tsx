@@ -211,6 +211,15 @@ function App() {
       return;
     }
 
+    case "SHOW_ANY_PROJECTS": {
+      // for now, treat this as backendScreen or rotate between screens later
+      setHistory((prev) => [...prev, backendScreen]);
+      setSystemPrompt("Here is another example from the portfolio.");
+      setMode("ui");
+      setChatInput("");
+      return;
+    }    
+
     case "UNKNOWN":
     default: {
       setSystemPrompt(
