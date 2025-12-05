@@ -21,9 +21,19 @@ export function parseIntent(input: string): Intent {
   }
 
   // Go back
-  if (text === "back" || text === "go back" || text.includes("previous screen")) {
+    // Go back
+  if (
+    text === "back" ||
+    text === "go back" ||
+    text.includes("go back") ||
+    (text.includes("back") && text.includes("screen")) ||
+    text.includes("previous screen") ||
+    text.includes("prev screen") ||
+    text.includes("zurück")
+  ) {
     return { type: "GO_BACK" };
   }
+
 
   // Projects
   if (text.includes("project")) {
