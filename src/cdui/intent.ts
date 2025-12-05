@@ -6,6 +6,11 @@ export type Intent =
   | { type: "GO_BACK" }
   | { type: "UNKNOWN"; reason?: string };
 
+  function hasAny(text: string, candidates: string[]): boolean {
+    return candidates.some((word) => text.includes(word));
+  }
+  
+
 /**
  * Turn raw user text into a structured intent object.
  * This is the "brain" between natural language and UI.
@@ -15,35 +20,42 @@ export function parseIntent(input: string): Intent {
 
   if (!text) return { type: "UNKNOWN", reason: "empty" };
 
-  // CV / resume
-  if (text.includes("cv") || text.includes("curriculum") || text.includes("lebenslauf")) {
+  // --- CV / resume intent ---
+  if (hasAny(text, ["cv", "curriculum", "lebenslauf", "resume"])) {
     return { type: "SHOW_CV" };
   }
 
-  // Go back
-    // Go back
+  // --- Go back intent (much more tolerant now) ---
   if (
     text === "back" ||
     text === "go back" ||
-    text.includes("go back") ||
-    (text.includes("back") && text.includes("screen")) ||
-    text.includes("previous screen") ||
-    text.includes("prev screen") ||
-    text.includes("zurück")
+    hasAny(text, ["go back", "zurück"]) ||
+    (hasAny(text, ["back", "zurück"]) && hasAny(text, ["screen", "view"])) ||
+    hasAny(text, ["previous screen", "prev screen"])
   ) {
     return { type: "GO_BACK" };
   }
 
+  // --- Try to detect tech filters ---
+  let tech: string | undefined;
 
-  // Projects
-  if (text.includes("project")) {
-    // tech filters
-    if (text.includes("java")) return { type: "SHOW_PROJECTS", tech: "java" };
-    if (text.includes("firebase")) return { type: "SHOW_PROJECTS", tech: "firebase" };
-    if (text.includes("backend")) return { type: "SHOW_PROJECTS", tech: "backend" };
+  if (hasAny(text, ["java"])) tech = "java";
+  else if (hasAny(text, ["backend", "server", "api"])) tech = "backend";
+  else if (hasAny(text, ["firebase", "fire base"])) tech = "firebase";
 
-    return { type: "SHOW_PROJECTS" };
+  const mentionsProjects = hasAny(text, [
+    "project",
+    "projects",
+    "work",
+    "examples",
+  ]);
+  const soundsLikeShow = hasAny(text, ["show", "see", "only", "filter"]);
+
+  // --- Show projects intent ---
+  if (mentionsProjects || (soundsLikeShow && tech)) {
+    return { type: "SHOW_PROJECTS", tech };
   }
 
+  // Fallback
   return { type: "UNKNOWN", reason: "no match" };
 }
