@@ -91,6 +91,29 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({
         </ul>
       );
 
+    case "info_card":
+      return (
+        <div className="info-card">
+          <h2>{widget.title}</h2>
+          <p>{widget.body}</p>
+        </div>
+      );
+
+    case "tag_list":
+      return (
+        <div className="tag-list">
+          {widget.label && (
+            <p className="tag-list-label">{widget.label}</p>
+          )}
+          <div className="tag-list-tags">
+            {widget.tags.map((tag) => (
+              <span key={tag} className="tag-chip">
+                {tag}</span>
+            ))}
+          </div>
+        </div>
+      );
+
     default:
       // This should never happen if Widget union in types.ts is correct
       return <div>Unknown widget type</div>;

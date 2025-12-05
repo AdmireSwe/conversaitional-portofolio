@@ -14,7 +14,9 @@ export interface ScreenDescription {
 export type Widget =
   | TextWidget
   | ButtonRowWidget
-  | ProjectListWidget;
+  | ProjectListWidget
+  | InfoCardWidget
+  | TagListWidget;
 
 /** Simple text element */
 export interface TextWidget {
@@ -46,6 +48,19 @@ export interface ProjectSummary {
   name: string;
   techStack: string[];
 }
+
+export interface InfoCardWidget {
+  type: "info_card";
+  title: string;
+  body: string;
+}
+
+export interface TagListWidget {
+  type: "tag_list";
+  label?: string;
+  tags: string[];
+}
+
 
 // Helper to convert Project[] into a ProjectListWidget
 export function projectListFromProjects(projects: Project[]): ProjectListWidget {

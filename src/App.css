@@ -109,3 +109,49 @@ ul {
   list-style-type: none;
   padding-left: 0;
 }
+
+.info-card {
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-top: 1.5rem;
+  background: #f5f7fb;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  max-width: 720px;
+}
+
+.info-card h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.info-card p {
+  margin: 0;
+  line-height: 1.5;
+  color: #334155;
+}
+
+.tag-list {
+  margin-top: 1.25rem;
+}
+
+.tag-list-label {
+  margin: 0 0 0.5rem;
+  font-weight: 500;
+  color: #475569;
+}
+
+.tag-list-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tag-chip {
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.85rem;
+  background: #e2e8f0;
+  color: #0f172a;
+  white-space: nowrap;
+}
