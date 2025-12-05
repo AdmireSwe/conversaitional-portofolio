@@ -1,5 +1,8 @@
 // CDUI Core Types — v1 MVP
 
+import type { Project } from "./projects";
+
+
 /** Every screen is a state the UI can be in */
 export interface ScreenDescription {
   screenId: string;                 // Unique identifier for this screen
@@ -43,3 +46,16 @@ export interface ProjectSummary {
   name: string;
   techStack: string[];
 }
+
+// Helper to convert Project[] into a ProjectListWidget
+export function projectListFromProjects(projects: Project[]): ProjectListWidget {
+  return {
+    type: "project_list",
+    projects: projects.map((p) => ({
+      id: p.id,
+      name: p.name,
+      techStack: p.techStack,
+    })),
+  };
+}
+

@@ -1,5 +1,8 @@
 import { parseIntent, type Intent } from "./cdui/intent";
 
+import { allProjects } from "./cdui/projects";
+import { projectListFromProjects } from "./cdui/types";
+
 
 import React, { useState } from "react";
 import "./App.css";
@@ -21,29 +24,14 @@ const homeScreen: ScreenDescription = {
       variant: "h1",
       content: "Welcome to the Conversational Portfolio (CDUI demo)",
     },
-    {
-      type: "project_list",
-      projects: [
-        {
-          id: "proj1",
-          name: "Java Vocab Trainer",
-          techStack: ["Java", "OOP"],
-        },
-        {
-          id: "proj2",
-          name: "EasyTagsy",
-          techStack: ["React", "Firebase", "Stripe"],
-        },
-      ],
-    },
+    projectListFromProjects(allProjects),
     {
       type: "button_row",
-      buttons: [
-        { id: "talk_to_interface", label: "Talk to the interface" },
-      ],
+      buttons: [{ id: "talk_to_interface", label: "Talk to the interface" }],
     },
   ],
 };
+
 
 const javaScreen: ScreenDescription = {
   screenId: "java_projects",
@@ -54,24 +42,16 @@ const javaScreen: ScreenDescription = {
       variant: "h1",
       content: "Java-focused projects",
     },
-    {
-      type: "project_list",
-      projects: [
-        {
-          id: "proj1",
-          name: "Java Vocab Trainer",
-          techStack: ["Java", "OOP"],
-        },
-      ],
-    },
+    projectListFromProjects(
+      allProjects.filter((p) => p.techStack.includes("Java"))
+    ),
     {
       type: "button_row",
-      buttons: [
-        { id: "talk_to_interface", label: "Ask for something else" },
-      ],
+      buttons: [{ id: "talk_to_interface", label: "Ask for something else" }],
     },
   ],
 };
+
 
 const backendScreen: ScreenDescription = {
   screenId: "backend_projects",
@@ -82,29 +62,21 @@ const backendScreen: ScreenDescription = {
       variant: "h1",
       content: "Backend-oriented projects",
     },
-    {
-      type: "project_list",
-      projects: [
-        {
-          id: "proj1",
-          name: "Java Vocab Trainer",
-          techStack: ["Java", "OOP", "CLI"],
-        },
-        {
-          id: "proj2",
-          name: "EasyTagsy",
-          techStack: ["React", "Firebase", "Cloud Functions"],
-        },
-      ],
-    },
+    projectListFromProjects(
+      allProjects.filter(
+        (p) =>
+          p.kind === "backend" ||
+          p.kind === "fullstack" ||
+          p.kind === "cli"
+      )
+    ),
     {
       type: "button_row",
-      buttons: [
-        { id: "talk_to_interface", label: "Refine the view" },
-      ],
+      buttons: [{ id: "talk_to_interface", label: "Refine the view" }],
     },
   ],
 };
+
 
 const cvScreen: ScreenDescription = {
   screenId: "cv_download",
