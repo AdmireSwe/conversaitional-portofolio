@@ -91,6 +91,12 @@ export interface TimelineWidget {
   entries: TimelineEntry[];
 }
 
+// --- Screen mutation model for pseudo-AI refinements ---
+
+export type ScreenMutation =
+  | { kind: "ADD_TAG"; tag: string }
+  | { kind: "REMOVE_TAG"; tag: string };
+
 
 
 // Helper to convert Project[] into a ProjectListWidget
