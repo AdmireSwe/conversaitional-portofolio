@@ -141,6 +141,31 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({
             </ul>
           </div>
         );
+
+        case "skill_matrix":
+          return (
+            <div className="skill-matrix">
+              <h2 className="skill-matrix-title">{widget.title}</h2>
+              <div className="skill-matrix-grid">
+                {widget.rows.map((row) => (
+                  <div key={row.area} className="skill-matrix-row">
+                    <div className="skill-matrix-area">{row.area}</div>
+                    <div className="skill-matrix-skills">
+                      {row.skills.map((skill) => (
+                        <span key={skill} className="skill-chip">
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                    {row.level && (
+                      <div className="skill-matrix-level">{row.level}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+    
   
 
     default:

@@ -224,3 +224,58 @@ ul {
   color: #475569;
 }
 
+.skill-matrix {
+  margin-top: 1.5rem;
+  max-width: 720px;
+}
+
+.skill-matrix-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.skill-matrix-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.skill-matrix-row {
+  display: grid;
+  grid-template-columns: 0.9fr 2fr 0.8fr;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.skill-matrix-area {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #0f172a;
+}
+
+.skill-matrix-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.skill-chip {
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.skill-matrix-level {
+  font-size: 0.8rem;
+  text-align: right;
+  color: #64748b;
+}
+

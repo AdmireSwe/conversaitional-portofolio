@@ -17,7 +17,8 @@ export type Widget =
   | ButtonRowWidget
   | InfoCardWidget
   | TagListWidget
-  | TimelineWidget;
+  | TimelineWidget
+  | SkillMatrixWidget;
 
 
 /** Simple text element */
@@ -26,6 +27,19 @@ export interface TextWidget {
   variant: "h1" | "body";
   content: string;
 }
+
+export interface SkillMatrixRow {
+  area: string;       // e.g. "Frontend", "Backend"
+  skills: string[];   // e.g. ["React", "TypeScript"]
+  level?: string;     // e.g. "solid", "learning", "advanced"
+}
+
+export interface SkillMatrixWidget {
+  type: "skill_matrix";
+  title: string;
+  rows: SkillMatrixRow[];
+}
+
 
 /** A horizontal row of buttons the user can click */
 export interface ButtonRowWidget {

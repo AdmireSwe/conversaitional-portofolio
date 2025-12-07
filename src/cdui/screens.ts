@@ -5,33 +5,60 @@ import { allProjects } from "./projects";
 import { projectListFromProjects } from "./types";
 
 export const homeScreen: ScreenDescription = {
-  screenId: "home",
-  layout: "column",
-  widgets: [
-    {
-      type: "text",
-      variant: "h1",
-      content: "Welcome to the Conversational Portfolio (CDUI demo)",
-    },
-    projectListFromProjects(allProjects),
-    {
-      type: "info_card",
-      title: "Interface driven by conversation",
-      body:
-        "This portfolio is not a static page. It is a runtime that compiles natural language into structured UI. " +
-        "You can ask for specific projects, switch views, or later even talk to a digital avatar that explains the work.",
-    },
-    {
-      type: "tag_list",
-      label: "Technologies behind this interface",
-      tags: ["React", "TypeScript", "Vite", "CDUI runtime"],
-    },
-    {
-      type: "button_row",
-      buttons: [{ id: "talk_to_interface", label: "Talk to the interface" }],
-    },
-  ],
-};
+    screenId: "home",
+    layout: "column",
+    widgets: [
+      {
+        type: "text",
+        variant: "h1",
+        content: "Welcome to the Conversational Portfolio (CDUI demo)",
+      },
+      projectListFromProjects(allProjects),
+      {
+        type: "info_card",
+        title: "Interface driven by conversation",
+        body:
+          "This portfolio is not a static page. It is a runtime that compiles natural language into structured UI. " +
+          "You can ask for specific projects, switch views, or later even talk to a digital avatar that explains the work.",
+      },
+      {
+        type: "tag_list",
+        label: "Technologies behind this interface",
+        tags: ["React", "TypeScript", "Vite", "CDUI runtime"],
+      },
+      {
+        type: "skill_matrix",
+        title: "Skill matrix snapshot",
+        rows: [
+          {
+            area: "Frontend",
+            skills: ["React", "TypeScript", "HTML", "CSS"],
+            level: "solid foundation",
+          },
+          {
+            area: "Backend / Fullstack",
+            skills: ["Firebase", "REST APIs", "Auth", "Stripe basics"],
+            level: "growing experience",
+          },
+          {
+            area: "Programming languages",
+            skills: ["Java", "C#", "Python (basics)"],
+            level: "active learning",
+          },
+          {
+            area: "Tooling",
+            skills: ["Git", "GitHub", "VS Code", "Node.js"],
+            level: "daily use",
+          },
+        ],
+      },
+      {
+        type: "button_row",
+        buttons: [{ id: "talk_to_interface", label: "Talk to the interface" }],
+      },
+    ],
+  };
+  
 
 export const javaScreen: ScreenDescription = {
   screenId: "java_projects",
