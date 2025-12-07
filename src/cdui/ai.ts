@@ -6,6 +6,9 @@ import {
   cvScreen,
 } from "./screens";
 import type { ScreenDescription } from "./types";
+import { applyMutation } from "./mutate";
+import type { ScreenMutation } from "./types";
+
 
 /**
  * Result of "thinking" about a user command.
@@ -142,14 +145,53 @@ export function decideFromText(
     }
 
     case "UNKNOWN":
-    default: {
-      return {
-        kind: "noop",
-        systemPrompt:
-          `I didn't fully understand that. Right now you are on ${screenLabel(
-            current
-          )}. ` + nextActionsHint(current),
-      };
-    }
+        default: {
+          const rawText = text.trim();
+    
+          // -------- TAG REFINEMENT COMMANDS --------
+          // Examples:
+          //  "add AWS"
+          //  "add AWS tag"
+          //  "remove React"
+          //  "remove React tag"
+    
+          const addMatch = rawText.match(/^add (.+?)(?: tag)?$/i);
+          if (addMatch) {
+            const tag = addMatch[1].trim();
+            const mutated = applyMutation(current, {
+              kind: "ADD_TAG",
+              tag,
+            });
+            return {
+              kind: "push",
+              screen: mutated,
+              systemPrompt: `Added tag "${tag}" to this view.`,
+            };
+          }
+    
+          const removeMatch = rawText.match(/^remove (.+?)(?: tag)?$/i);
+          if (removeMatch) {
+            const tag = removeMatch[1].trim();
+            const mutated = applyMutation(current, {
+              kind: "REMOVE_TAG",
+              tag,
+            });
+            return {
+              kind: "push",
+              screen: mutated,
+              systemPrompt: `Removed tag "${tag}" from this view.`,
+            };
+          }
+    
+          // -------- FALLBACK --------
+          return {
+            kind: "noop",
+            systemPrompt:
+              `I didn't fully understand that. Right now you are on ${screenLabel(
+                current
+              )}. ` + nextActionsHint(current),
+          };
+        }
+    
   }
 }
