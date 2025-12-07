@@ -114,6 +114,35 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({
         </div>
       );
 
+      case "timeline":
+        return (
+          <div className="timeline">
+            <h2 className="timeline-title">{widget.title}</h2>
+            <ul className="timeline-list">
+              {widget.entries.map((entry) => (
+                <li key={entry.id} className="timeline-item">
+                  <div className="timeline-dot" />
+                  <div className="timeline-content">
+                    <div className="timeline-header">
+                      <span className="timeline-period">{entry.period}</span>
+                      <span className="timeline-title-text">{entry.title}</span>
+                    </div>
+                    {entry.subtitle && (
+                      <div className="timeline-subtitle">{entry.subtitle}</div>
+                    )}
+                    {entry.description && (
+                      <div className="timeline-description">
+                        {entry.description}
+                      </div>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+  
+
     default:
       // This should never happen if Widget union in types.ts is correct
       return <div>Unknown widget type</div>;

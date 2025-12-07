@@ -101,31 +101,61 @@ export const backendScreen: ScreenDescription = {
 };
 
 export const cvScreen: ScreenDescription = {
-  screenId: "cv_download",
-  layout: "column",
-  widgets: [
-    {
-      type: "text",
-      variant: "h1",
-      content: "CV download",
-    },
-    {
-      type: "text",
-      variant: "body",
-      content:
-        "In a later version, a real CV PDF will be generated here on demand.",
-    },
-    {
-      type: "tag_list",
-      label: "Core skill areas highlighted in this CV",
-      tags: ["Java", "C#", "React", "TypeScript", "SQL", "Backend basics"],
-    },
-    {
-      type: "button_row",
-      buttons: [
-        { id: "download_cv", label: "Download CV (mock)" },
-        { id: "talk_to_interface", label: "Ask something else" },
-      ],
-    },
-  ],
-};
+    screenId: "cv_download",
+    layout: "column",
+    widgets: [
+      {
+        type: "text",
+        variant: "h1",
+        content: "CV download",
+      },
+      {
+        type: "text",
+        variant: "body",
+        content:
+          "In a later version, a real CV PDF will be generated here on demand.",
+      },
+      {
+        type: "timeline",
+        title: "Education & training timeline",
+        entries: [
+          {
+            id: "wbs-ausbildung",
+            title: "Umschulung – Fachinformatiker Anwendungsentwicklung",
+            subtitle: "WBS Training (Germany)",
+            period: "2024 – 2026 (in progress)",
+            description:
+              "Career change into software development, focusing on programming, databases and software engineering fundamentals.",
+          },
+          {
+            id: "bth-web",
+            title: "Webbprogrammering studies",
+            subtitle: "Blekinge Tekniska Högskola (Sweden)",
+            period: "2024 – (in progress)",
+            description:
+              "Higher education in web technologies, including Python, C#, JavaScript and modern web architecture.",
+          },
+          {
+            id: "pre-it",
+            title: "Previous professional experience",
+            period: "Before 2024",
+            description:
+              "Background outside of IT that shapes soft skills, resilience and problem-solving – details will be in the full CV.",
+          },
+        ],
+      },
+      {
+        type: "tag_list",
+        label: "Core skill areas highlighted in this CV",
+        tags: ["Java", "C#", "React", "TypeScript", "SQL", "Backend basics"],
+      },
+      {
+        type: "button_row",
+        buttons: [
+          { id: "download_cv", label: "Download CV (mock)" },
+          { id: "talk_to_interface", label: "Ask something else" },
+        ],
+      },
+    ],
+  };
+  

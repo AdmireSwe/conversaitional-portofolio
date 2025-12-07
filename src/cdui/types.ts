@@ -13,10 +13,12 @@ export interface ScreenDescription {
 /** A widget is a UI building block */
 export type Widget =
   | TextWidget
-  | ButtonRowWidget
   | ProjectListWidget
+  | ButtonRowWidget
   | InfoCardWidget
-  | TagListWidget;
+  | TagListWidget
+  | TimelineWidget;
+
 
 /** Simple text element */
 export interface TextWidget {
@@ -60,6 +62,21 @@ export interface TagListWidget {
   label?: string;
   tags: string[];
 }
+
+export interface TimelineEntry {
+  id: string;
+  title: string;
+  subtitle?: string;
+  period: string;
+  description?: string;
+}
+
+export interface TimelineWidget {
+  type: "timeline";
+  title: string;
+  entries: TimelineEntry[];
+}
+
 
 
 // Helper to convert Project[] into a ProjectListWidget
