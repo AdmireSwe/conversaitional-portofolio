@@ -157,95 +157,117 @@ export function decideFromText(
     }
 
     case "UNKNOWN":
-    default: {
-      const rawText = text.trim();
-
-      // -------- SKILL MATRIX REFINEMENT --------
-      // Examples:
-      //  "add Python to programming languages"
-      //  "add AWS to backend"
-      const addSkillMatch = rawText.match(/^add (.+?) to (.+)$/i);
-      if (addSkillMatch) {
-        const skill = addSkillMatch[1].trim();
-        const areaRaw = addSkillMatch[2].trim();
-
-        const area = normalizeAreaName(areaRaw);
-        if (area) {
-          const mutated = applyMutation(current, {
-            kind: "ADD_SKILL",
-            area,
-            skill,
-          });
+        default: {
+          const rawText = text.trim();
+    
+          // -------- SKILL MATRIX REFINEMENT --------
+          const addSkillMatch = rawText.match(/^add (.+?) to (.+)$/i);
+          if (addSkillMatch) {
+            const skill = addSkillMatch[1].trim();
+            const areaRaw = addSkillMatch[2].trim();
+    
+            const area = normalizeAreaName(areaRaw);
+            if (area) {
+              const mutated = applyMutation(current, {
+                kind: "ADD_SKILL",
+                area,
+                skill,
+              });
+              return {
+                kind: "push",
+                screen: mutated,
+                systemPrompt: `Added "${skill}" to "${area}" in the skill matrix.`,
+              };
+            }
+          }
+    
+          const levelMatch = rawText.match(
+            /^(change|set) (.+?) level to (.+)$/i
+          );
+          if (levelMatch) {
+            const areaRaw = levelMatch[2].trim();
+            const level = levelMatch[3].trim();
+            const area = normalizeAreaName(areaRaw);
+    
+            if (area) {
+              const mutated = applyMutation(current, {
+                kind: "CHANGE_LEVEL",
+                area,
+                level,
+              });
+              return {
+                kind: "push",
+                screen: mutated,
+                systemPrompt: `Updated level for "${area}" to "${level}".`,
+              };
+            }
+          }
+    
+          // -------- TIMELINE REFINEMENT --------
+          // Examples:
+          //  "add internship at IFD in 2026 to timeline"
+          //  "add SAP consultant training to timeline"
+          const timelineMatch = rawText.match(/^add (.+?) to timeline$/i);
+          if (timelineMatch) {
+            const title = timelineMatch[1].trim();
+    
+            const entry = {
+              id: `custom-${Date.now()}`,
+              title,
+              period: "to be decided",
+              description: "Added via conversational command.",
+            };
+    
+            const mutated = applyMutation(current, {
+              kind: "ADD_TIMELINE_ENTRY",
+              entry,
+            });
+    
+            return {
+              kind: "push",
+              screen: mutated,
+              systemPrompt: `Added "${title}" as a new timeline entry.`,
+            };
+          }
+    
+          // -------- TAG REFINEMENT COMMANDS --------
+          const addMatch = rawText.match(/^add (.+?)(?: tag)?$/i);
+          if (addMatch) {
+            const tag = addMatch[1].trim();
+            const mutated = applyMutation(current, {
+              kind: "ADD_TAG",
+              tag,
+            });
+            return {
+              kind: "push",
+              screen: mutated,
+              systemPrompt: `Added tag "${tag}" to this view.`,
+            };
+          }
+    
+          const removeMatch = rawText.match(/^remove (.+?)(?: tag)?$/i);
+          if (removeMatch) {
+            const tag = removeMatch[1].trim();
+            const mutated = applyMutation(current, {
+              kind: "REMOVE_TAG",
+              tag,
+            });
+            return {
+              kind: "push",
+              screen: mutated,
+              systemPrompt: `Removed tag "${tag}" from this view.`,
+            };
+          }
+    
+          // -------- FALLBACK --------
           return {
-            kind: "push",
-            screen: mutated,
-            systemPrompt: `Added "${skill}" to "${area}" in the skill matrix.`,
+            kind: "noop",
+            systemPrompt:
+              `I didn't fully understand that. Right now you are on ${screenLabel(
+                current
+              )}. ` + nextActionsHint(current),
           };
         }
-      }
-
-      // Examples:
-      //  "change backend level to strong"
-      //  "set frontend level to advanced"
-      const levelMatch = rawText.match(
-        /^(change|set) (.+?) level to (.+)$/i
-      );
-      if (levelMatch) {
-        const areaRaw = levelMatch[2].trim();
-        const level = levelMatch[3].trim();
-        const area = normalizeAreaName(areaRaw);
-
-        if (area) {
-          const mutated = applyMutation(current, {
-            kind: "CHANGE_LEVEL",
-            area,
-            level,
-          });
-          return {
-            kind: "push",
-            screen: mutated,
-            systemPrompt: `Updated level for "${area}" to "${level}".`,
-          };
-        }
-      }
-
-      // -------- TAG REFINEMENT COMMANDS --------
-      const addMatch = rawText.match(/^add (.+?)(?: tag)?$/i);
-      if (addMatch) {
-        const tag = addMatch[1].trim();
-        const mutated = applyMutation(current, {
-          kind: "ADD_TAG",
-          tag,
-        });
-        return {
-          kind: "push",
-          screen: mutated,
-          systemPrompt: `Added tag "${tag}" to this view.`,
-        };
-      }
-
-      const removeMatch = rawText.match(/^remove (.+?)(?: tag)?$/i);
-      if (removeMatch) {
-        const tag = removeMatch[1].trim();
-        const mutated = applyMutation(current, {
-          kind: "REMOVE_TAG",
-          tag,
-        });
-        return {
-          kind: "push",
-          screen: mutated,
-          systemPrompt: `Removed tag "${tag}" from this view.`,
-        };
-      }
-
-      // -------- FALLBACK --------
-      return {
-        kind: "noop",
-        systemPrompt:
-          `I didn't fully understand that. Right now you are on ${screenLabel(
-            current
-          )}. ` + nextActionsHint(current),
-      };
-    }
+    
   }
 }

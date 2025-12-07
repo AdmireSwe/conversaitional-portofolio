@@ -1,4 +1,9 @@
-import type { ScreenDescription, ScreenMutation, Widget } from "./types";
+import type {
+    ScreenDescription,
+    ScreenMutation,
+    TimelineEntry,
+  } from "./types";
+  
 
 export function applyMutation(
     screen: ScreenDescription,
@@ -13,6 +18,8 @@ export function applyMutation(
         return addSkill(screen, mutation.area, mutation.skill);
       case "CHANGE_LEVEL":
         return changeLevel(screen, mutation.area, mutation.level);
+      case "ADD_TIMELINE_ENTRY":
+        return addTimelineEntry(screen, mutation.entry);
       default:
         return screen;
     }
@@ -114,4 +121,24 @@ function addSkill(
       }),
     };
   }
+
+  // -------- TIMELINE OPERATIONS --------
+
+function addTimelineEntry(
+    screen: ScreenDescription,
+    entry: TimelineEntry
+  ): ScreenDescription {
+    return {
+      ...screen,
+      widgets: screen.widgets.map((w) => {
+        if (w.type !== "timeline") return w;
+  
+        return {
+          ...w,
+          entries: [...w.entries, entry],
+        };
+      }),
+    };
+  }
+  
   
