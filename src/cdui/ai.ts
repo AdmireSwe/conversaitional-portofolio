@@ -229,7 +229,29 @@ export function decideFromText(
               systemPrompt: `Added "${title}" as a new timeline entry.`,
             };
           }
-    
+          
+          // -------- PROJECT FILTERING --------
+// Examples:
+//  "show projects using firebase"
+//  "filter by java"
+//  "only backend with typescript"
+const projectMatch = rawText.match(
+    /(?:show|filter|only).*?(?:projects?)?.*?(?:using|with|by)\s+(.+)$/i
+  );
+  if (projectMatch) {
+    const tech = projectMatch[1].trim();
+    const mutated = applyMutation(current, {
+      kind: "FILTER_PROJECTS",
+      tech,
+    });
+    return {
+      kind: "push",
+      screen: mutated,
+      systemPrompt: `Filtered projects by "${tech}".`,
+    };
+  }
+  
+
           // -------- TAG REFINEMENT COMMANDS --------
           const addMatch = rawText.match(/^add (.+?)(?: tag)?$/i);
           if (addMatch) {

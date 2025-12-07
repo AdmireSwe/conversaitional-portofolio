@@ -20,6 +20,8 @@ export function applyMutation(
         return changeLevel(screen, mutation.area, mutation.level);
       case "ADD_TIMELINE_ENTRY":
         return addTimelineEntry(screen, mutation.entry);
+      case "FILTER_PROJECTS":
+        return filterProjects(screen, mutation.tech);  
       default:
         return screen;
     }
@@ -140,5 +142,29 @@ function addTimelineEntry(
       }),
     };
   }
+
+  // -------- PROJECT FILTERING --------
+
+function filterProjects(
+    screen: ScreenDescription,
+    tech: string
+  ): ScreenDescription {
+    const techLower = tech.toLowerCase();
+  
+    return {
+      ...screen,
+      widgets: screen.widgets.map((w) => {
+        if (w.type !== "project_list") return w;
+  
+        return {
+          ...w,
+          projects: w.projects.filter((proj) =>
+            proj.techStack.some((t) => t.toLowerCase().includes(techLower))
+          ),
+        };
+      }),
+    };
+  }
+  
   
   
