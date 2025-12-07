@@ -7,8 +7,6 @@ import {
 } from "./screens";
 import type { ScreenDescription } from "./types";
 import { applyMutation } from "./mutate";
-import type { ScreenMutation } from "./types";
-
 
 /**
  * Result of "thinking" about a user command.
@@ -75,6 +73,22 @@ function nextActionsHint(screen: ScreenDescription): string {
   }
 }
 
+// maps "backend", "backend skills", "fullstack", etc. to the matrix row names
+function normalizeAreaName(input: string): string | null {
+  const s = input.toLowerCase();
+
+  if (s.includes("front")) return "Frontend";
+  if (s.includes("back") || s.includes("fullstack")) {
+    return "Backend / Fullstack";
+  }
+  if (s.includes("program") || s.includes("language")) {
+    return "Programming languages";
+  }
+  if (s.includes("tool")) return "Tooling";
+
+  return null;
+}
+
 // --- Main decision function ----------------------------------------
 
 /**
@@ -117,9 +131,7 @@ export function decideFromText(
       return {
         kind: "push",
         screen: nextScreen,
-        systemPrompt:
-          `Showing ${label}. ` +
-          nextActionsHint(nextScreen),
+        systemPrompt: `Showing ${label}. ` + nextActionsHint(nextScreen),
       };
     }
 
@@ -145,53 +157,95 @@ export function decideFromText(
     }
 
     case "UNKNOWN":
-        default: {
-          const rawText = text.trim();
-    
-          // -------- TAG REFINEMENT COMMANDS --------
-          // Examples:
-          //  "add AWS"
-          //  "add AWS tag"
-          //  "remove React"
-          //  "remove React tag"
-    
-          const addMatch = rawText.match(/^add (.+?)(?: tag)?$/i);
-          if (addMatch) {
-            const tag = addMatch[1].trim();
-            const mutated = applyMutation(current, {
-              kind: "ADD_TAG",
-              tag,
-            });
-            return {
-              kind: "push",
-              screen: mutated,
-              systemPrompt: `Added tag "${tag}" to this view.`,
-            };
-          }
-    
-          const removeMatch = rawText.match(/^remove (.+?)(?: tag)?$/i);
-          if (removeMatch) {
-            const tag = removeMatch[1].trim();
-            const mutated = applyMutation(current, {
-              kind: "REMOVE_TAG",
-              tag,
-            });
-            return {
-              kind: "push",
-              screen: mutated,
-              systemPrompt: `Removed tag "${tag}" from this view.`,
-            };
-          }
-    
-          // -------- FALLBACK --------
+    default: {
+      const rawText = text.trim();
+
+      // -------- SKILL MATRIX REFINEMENT --------
+      // Examples:
+      //  "add Python to programming languages"
+      //  "add AWS to backend"
+      const addSkillMatch = rawText.match(/^add (.+?) to (.+)$/i);
+      if (addSkillMatch) {
+        const skill = addSkillMatch[1].trim();
+        const areaRaw = addSkillMatch[2].trim();
+
+        const area = normalizeAreaName(areaRaw);
+        if (area) {
+          const mutated = applyMutation(current, {
+            kind: "ADD_SKILL",
+            area,
+            skill,
+          });
           return {
-            kind: "noop",
-            systemPrompt:
-              `I didn't fully understand that. Right now you are on ${screenLabel(
-                current
-              )}. ` + nextActionsHint(current),
+            kind: "push",
+            screen: mutated,
+            systemPrompt: `Added "${skill}" to "${area}" in the skill matrix.`,
           };
         }
-    
+      }
+
+      // Examples:
+      //  "change backend level to strong"
+      //  "set frontend level to advanced"
+      const levelMatch = rawText.match(
+        /^(change|set) (.+?) level to (.+)$/i
+      );
+      if (levelMatch) {
+        const areaRaw = levelMatch[2].trim();
+        const level = levelMatch[3].trim();
+        const area = normalizeAreaName(areaRaw);
+
+        if (area) {
+          const mutated = applyMutation(current, {
+            kind: "CHANGE_LEVEL",
+            area,
+            level,
+          });
+          return {
+            kind: "push",
+            screen: mutated,
+            systemPrompt: `Updated level for "${area}" to "${level}".`,
+          };
+        }
+      }
+
+      // -------- TAG REFINEMENT COMMANDS --------
+      const addMatch = rawText.match(/^add (.+?)(?: tag)?$/i);
+      if (addMatch) {
+        const tag = addMatch[1].trim();
+        const mutated = applyMutation(current, {
+          kind: "ADD_TAG",
+          tag,
+        });
+        return {
+          kind: "push",
+          screen: mutated,
+          systemPrompt: `Added tag "${tag}" to this view.`,
+        };
+      }
+
+      const removeMatch = rawText.match(/^remove (.+?)(?: tag)?$/i);
+      if (removeMatch) {
+        const tag = removeMatch[1].trim();
+        const mutated = applyMutation(current, {
+          kind: "REMOVE_TAG",
+          tag,
+        });
+        return {
+          kind: "push",
+          screen: mutated,
+          systemPrompt: `Removed tag "${tag}" from this view.`,
+        };
+      }
+
+      // -------- FALLBACK --------
+      return {
+        kind: "noop",
+        systemPrompt:
+          `I didn't fully understand that. Right now you are on ${screenLabel(
+            current
+          )}. ` + nextActionsHint(current),
+      };
+    }
   }
 }

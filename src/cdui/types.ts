@@ -95,7 +95,10 @@ export interface TimelineWidget {
 
 export type ScreenMutation =
   | { kind: "ADD_TAG"; tag: string }
-  | { kind: "REMOVE_TAG"; tag: string };
+  | { kind: "REMOVE_TAG"; tag: string }
+  | { kind: "ADD_SKILL"; area: string; skill: string }
+  | { kind: "CHANGE_LEVEL"; area: string; level: string };
+
 
 
 
