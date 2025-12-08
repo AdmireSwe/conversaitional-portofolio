@@ -7,7 +7,27 @@ import { parseIntent, type Intent } from "./cdui/intent";
 import { homeScreen } from "./cdui/screens";
 import { decideFromText } from "./cdui/ai";
 
+// 👇 NEW IMPORT: once backend exists, we replace the stub inside this file
+// import { callBrain } from "./cdui/brain";
+
 type Mode = "ui" | "chat";
+
+// 👇 NEW TYPE — remote brain response shape
+interface BrainResponse {
+  mutations: any[]; // we'll strongly type later
+  systemPrompt?: string;
+}
+
+// 👇 NEW FUNCTION — remote brain stub
+// Later this will call /api/brain on Vercel
+async function callBrain(
+  text: string,
+  currentScreen: ScreenDescription,
+  history: ScreenDescription[]
+): Promise<BrainResponse | null> {
+  // For now, always return null → triggers fallback rule engine
+  return null;
+}
 
 function App() {
   const [mode, setMode] = useState<Mode>("ui");
@@ -21,33 +41,29 @@ function App() {
 
   /**
    * Handle button clicks from the CDUI screen.
-   * For now there's only one special button: "talk_to_interface".
    */
   const handleAction = (actionId: string) => {
     if (actionId === "talk_to_interface") {
-      // Switch into full-screen chat mode
       setMode("chat");
       return;
     }
 
     if (actionId === "download_cv") {
-      // Mock CV download
       alert("This will trigger a real CV download in a later version.");
       return;
     }
 
-    // Later: other action IDs will be handled here.
     console.log("Unhandled action:", actionId);
   };
 
   /**
-   * Decide which screen to show based on the user's text command.
-   * GO_BACK manipulates history directly, everything else uses the AI adapter.
+   * Decide which screen to show based on user's text command.
+   * NOW supports remote AI first, local rule engine second.
    */
-  const handleCommand = (text: string) => {
+  const handleCommand = async (text: string) => {
     const intent: Intent = parseIntent(text);
 
-    // GO_BACK stays handled here because it manipulates history directly
+    // GO_BACK stays local (does not involve backend)
     if (intent.type === "GO_BACK") {
       setHistory((prev) => {
         if (prev.length <= 1) return prev;
@@ -61,7 +77,21 @@ function App() {
       return;
     }
 
-    // Everything else goes through the AI adapter
+    // 👇 NEW — FIRST try remote brain
+    const remote = await callBrain(text, currentScreen, history);
+    if (remote && Array.isArray(remote.mutations)) {
+      // For now, simple behavior: if remote returns empty array, ignore
+      if (remote.mutations.length > 0) {
+        // Later: apply mutations here
+        // TODO: apply remote mutations to screen
+        setSystemPrompt(remote.systemPrompt ?? "Updated view via AI backend.");
+        setMode("ui");
+        setChatInput("");
+        return;
+      }
+    }
+
+    // 👇 FALLBACK — LOCAL RULE ENGINE
     const result = decideFromText(text, history);
 
     if (result.kind === "push") {
@@ -79,12 +109,12 @@ function App() {
     }
   };
 
-  const handleChatSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
+  const handleChatSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
-    handleCommand(chatInput);
+    await handleCommand(chatInput); // 👈 ensure async
   };
 
-  // MODE: CHAT (full-screen)
+  // MODE: CHAT
   if (mode === "chat") {
     return (
       <div className="chat-fullscreen">
@@ -118,7 +148,7 @@ function App() {
     );
   }
 
-  // MODE: UI (full-screen CDUI screen)
+  // MODE: UI
   return (
     <div className="ui-fullscreen">
       <ScreenRenderer screen={currentScreen} onAction={handleAction} />
