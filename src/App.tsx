@@ -5,28 +5,58 @@ import { ScreenRenderer } from "./cdui/components/ScreenRenderer";
 import type { ScreenDescription } from "./cdui/types";
 import { parseIntent, type Intent } from "./cdui/intent";
 import { homeScreen } from "./cdui/screens";
-import { decideFromText } from "./cdui/ai";
-
-// 👇 NEW IMPORT: once backend exists, we replace the stub inside this file
-// import { callBrain } from "./cdui/brain";
+import { decideFromText, type AIResult } from "./cdui/ai";
 
 type Mode = "ui" | "chat";
 
-// 👇 NEW TYPE — remote brain response shape
-interface BrainResponse {
-  mutations: any[]; // we'll strongly type later
-  systemPrompt?: string;
-}
+// will be true in a Vercel build, false in `npm run dev`
+const IS_PROD = import.meta.env.PROD;
 
-// 👇 NEW FUNCTION — remote brain stub
-// Later this will call /api/brain on Vercel
+/**
+ * In dev:
+ *   - return null → we fall back to local rule engine.
+ *
+ * In production (Vercel):
+ *   - call `/api/brain` on the same origin.
+ */
 async function callBrain(
   text: string,
   currentScreen: ScreenDescription,
   history: ScreenDescription[]
-): Promise<BrainResponse | null> {
-  // For now, always return null → triggers fallback rule engine
-  return null;
+): Promise<AIResult | null> {
+  if (!IS_PROD) {
+    // Local development: do NOTHING, let the rule engine handle it.
+    return null;
+  }
+
+  try {
+    const response = await fetch("/api/brain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        currentScreen,
+        history: history.map((h) => h.screenId),
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn("Brain responded with non-OK status:", response.status);
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (!data || (data.kind !== "push" && data.kind !== "noop")) {
+      console.warn("Brain returned invalid payload:", data);
+      return null;
+    }
+
+    return data as AIResult;
+  } catch (err) {
+    console.error("callBrain failed:", err);
+    return null;
+  }
 }
 
 function App() {
@@ -57,13 +87,14 @@ function App() {
   };
 
   /**
-   * Decide which screen to show based on user's text command.
-   * NOW supports remote AI first, local rule engine second.
+   * Decide which screen to show based on the user's text command.
+   * - GO_BACK stays local
+   * - Otherwise: try remote brain first, fall back to local rule engine
    */
   const handleCommand = async (text: string) => {
     const intent: Intent = parseIntent(text);
 
-    // GO_BACK stays local (does not involve backend)
+    // GO_BACK handled locally (no backend)
     if (intent.type === "GO_BACK") {
       setHistory((prev) => {
         if (prev.length <= 1) return prev;
@@ -77,21 +108,25 @@ function App() {
       return;
     }
 
-    // 👇 NEW — FIRST try remote brain
+    // 1) Try remote brain (only does anything in production)
     const remote = await callBrain(text, currentScreen, history);
-    if (remote && Array.isArray(remote.mutations)) {
-      // For now, simple behavior: if remote returns empty array, ignore
-      if (remote.mutations.length > 0) {
-        // Later: apply mutations here
-        // TODO: apply remote mutations to screen
-        setSystemPrompt(remote.systemPrompt ?? "Updated view via AI backend.");
+    if (remote) {
+      if (remote.kind === "push") {
+        setHistory((prev) => [...prev, remote.screen]);
+        if (remote.systemPrompt) setSystemPrompt(remote.systemPrompt);
         setMode("ui");
+        setChatInput("");
+        return;
+      }
+
+      if (remote.kind === "noop") {
+        setSystemPrompt(remote.systemPrompt);
         setChatInput("");
         return;
       }
     }
 
-    // 👇 FALLBACK — LOCAL RULE ENGINE
+    // 2) Fallback: local rule-based engine
     const result = decideFromText(text, history);
 
     if (result.kind === "push") {
@@ -104,17 +139,16 @@ function App() {
 
     if (result.kind === "noop") {
       setSystemPrompt(result.systemPrompt);
-      // stay in chat mode so user can refine
       return;
     }
   };
 
   const handleChatSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
-    await handleCommand(chatInput); // 👈 ensure async
+    await handleCommand(chatInput);
   };
 
-  // MODE: CHAT
+  // MODE: CHAT (full-screen)
   if (mode === "chat") {
     return (
       <div className="chat-fullscreen">
@@ -148,7 +182,7 @@ function App() {
     );
   }
 
-  // MODE: UI
+  // MODE: UI (full-screen CDUI screen)
   return (
     <div className="ui-fullscreen">
       <ScreenRenderer screen={currentScreen} onAction={handleAction} />
