@@ -2,30 +2,35 @@ import React, { useState } from "react";
 import "./App.css";
 
 import { ScreenRenderer } from "./cdui/components/ScreenRenderer";
-import type { ScreenDescription } from "./cdui/types";
+import type { ScreenDescription, ScreenMutation } from "./cdui/types";
+import { applyMutation } from "./cdui/mutate";
 import { parseIntent, type Intent } from "./cdui/intent";
 import { homeScreen } from "./cdui/screens";
 import { decideFromText, type AIResult } from "./cdui/ai";
 
 type Mode = "ui" | "chat";
 
-// will be true in a Vercel build, false in `npm run dev`
 const IS_PROD = import.meta.env.PROD;
 
+interface BrainResponse {
+  mutations: ScreenMutation[];
+  systemPrompt?: string;
+}
+
 /**
- * In dev:
- *   - return null → we fall back to local rule engine.
+ * In production on Vercel:
+ *   - calls /api/brain, which uses OpenAI and returns mutations.
  *
- * In production (Vercel):
- *   - call `/api/brain` on the same origin.
+ * In local dev:
+ *   - returns null so we fall back to the local rule engine.
  */
 async function callBrain(
   text: string,
   currentScreen: ScreenDescription,
   history: ScreenDescription[]
-): Promise<AIResult | null> {
+): Promise<BrainResponse | null> {
   if (!IS_PROD) {
-    // Local development: do NOTHING, let the rule engine handle it.
+    // Local development: don't call remote AI, keep things cheap & simple.
     return null;
   }
 
@@ -47,12 +52,12 @@ async function callBrain(
 
     const data = await response.json();
 
-    if (!data || (data.kind !== "push" && data.kind !== "noop")) {
+    if (!data || !Array.isArray(data.mutations)) {
       console.warn("Brain returned invalid payload:", data);
       return null;
     }
 
-    return data as AIResult;
+    return data as BrainResponse;
   } catch (err) {
     console.error("callBrain failed:", err);
     return null;
@@ -89,7 +94,7 @@ function App() {
   /**
    * Decide which screen to show based on the user's text command.
    * - GO_BACK stays local
-   * - Otherwise: try remote brain first, fall back to local rule engine
+   * - Otherwise: try remote brain first (in prod), fall back to local rule engine
    */
   const handleCommand = async (text: string) => {
     const intent: Intent = parseIntent(text);
@@ -108,26 +113,36 @@ function App() {
       return;
     }
 
-    // 1) Try remote brain (only does anything in production)
+    // 1) Try remote brain (AI) — only does anything in production
     const remote = await callBrain(text, currentScreen, history);
     if (remote) {
-      if (remote.kind === "push") {
-        setHistory((prev) => [...prev, remote.screen]);
-        if (remote.systemPrompt) setSystemPrompt(remote.systemPrompt);
+      const { mutations, systemPrompt } = remote;
+
+      if (mutations.length > 0) {
+        // Apply all mutations sequentially to the current screen
+        const updatedScreen = mutations.reduce<ScreenDescription>(
+          (screen, mutation) => applyMutation(screen, mutation),
+          currentScreen
+        );
+
+        setHistory((prev) => [...prev, updatedScreen]);
+        if (systemPrompt) setSystemPrompt(systemPrompt);
         setMode("ui");
         setChatInput("");
         return;
       }
 
-      if (remote.kind === "noop") {
-        setSystemPrompt(remote.systemPrompt);
+      // No mutations but systemPrompt present → treat like a NOOP with message
+      if (systemPrompt) {
+        setSystemPrompt(systemPrompt);
         setChatInput("");
+        // stay in chat mode so user can refine
         return;
       }
     }
 
     // 2) Fallback: local rule-based engine
-    const result = decideFromText(text, history);
+    const result: AIResult = decideFromText(text, history);
 
     if (result.kind === "push") {
       setHistory((prev) => [...prev, result.screen]);
