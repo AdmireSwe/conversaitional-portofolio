@@ -12,10 +12,13 @@ import { applyMutation } from "./cdui/mutate";
 
 const IS_PROD = import.meta.env.PROD;
 
+type Mode = "ui" | "chat";
+
 function App() {
   const [history, setHistory] = useState<ScreenDescription[]>([homeScreen]);
   const currentScreen = history[history.length - 1];
 
+  const [mode, setMode] = useState<Mode>("ui");
   const [chatInput, setChatInput] = useState("");
   const [systemPrompt, setSystemPrompt] = useState(
     "You are not browsing pages. You are shaping the interface. What do you want to see?"
@@ -23,23 +26,20 @@ function App() {
 
   /**
    * Handle button clicks from the CDUI screen.
-   * For now there's only one special button: "talk_to_interface".
-   * Since chat is always visible now, this could later focus the input field.
+   * - "talk_to_interface" opens the chat dock.
+   * - "download_cv" is still a mock for now.
    */
   const handleAction = (actionId: string) => {
     if (actionId === "talk_to_interface") {
-      // Chat is always visible now; for now we just log.
-      console.log("Talk to interface clicked – chat is below.");
+      setMode("chat");
       return;
     }
 
     if (actionId === "download_cv") {
-      // Mock CV download
       alert("This will trigger a real CV download in a later version.");
       return;
     }
 
-    // Later: other action IDs will be handled here.
     console.log("Unhandled action:", actionId);
   };
 
@@ -66,6 +66,7 @@ function App() {
       });
       setSystemPrompt("Went back to the previous view.");
       setChatInput("");
+      setMode("ui");
       return;
     }
 
@@ -79,12 +80,13 @@ function App() {
         setHistory((prev) => [...prev, result.screen]);
         if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
         setChatInput("");
+        setMode("ui");
         return;
       }
 
       if (result.kind === "noop") {
         setSystemPrompt(result.systemPrompt);
-        // user can refine in the chat dock
+        // stay in chat so user can refine
         return;
       }
 
@@ -104,6 +106,7 @@ function App() {
         setHistory((prev) => [...prev, result.screen]);
         if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
         setChatInput("");
+        setMode("ui");
         return;
       }
 
@@ -133,6 +136,7 @@ function App() {
     }
 
     setChatInput("");
+    setMode("ui");
   };
 
   const handleChatSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
@@ -142,30 +146,44 @@ function App() {
 
   return (
     <div className="app-shell">
+      {/* Main UI area */}
       <div className="ui-region">
         <div className="ui-fullscreen">
           <ScreenRenderer screen={currentScreen} onAction={handleAction} />
         </div>
       </div>
 
-      <div className="chat-dock">
-        <div className="chat-box">
-          <p className="chat-label">Interface</p>
-          <p className="chat-system">{systemPrompt}</p>
+      {/* Chat dock (only visible when mode === "chat") */}
+      {mode === "chat" && (
+        <div className="chat-dock fade-in">
+          <div className="chat-box">
+            <p className="chat-label">Interface</p>
+            <p className="chat-system">{systemPrompt}</p>
 
-          <form onSubmit={handleChatSubmit} className="chat-form">
-            <input
-              className="chat-input"
-              placeholder="Type what you want the interface to become..."
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-            />
-            <div className="chat-buttons">
-              <button type="submit">Commit change</button>
-            </div>
-          </form>
+            <form onSubmit={handleChatSubmit} className="chat-form">
+              <input
+                className="chat-input"
+                placeholder="Describe how you want the interface to change..."
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                autoFocus
+              />
+              <div className="chat-buttons">
+                <button type="submit">Commit change</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChatInput("");
+                    setMode("ui");
+                  }}
+                >
+                  Close chat
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
