@@ -12,26 +12,25 @@ import { applyMutation } from "./cdui/mutate";
 
 const IS_PROD = import.meta.env.PROD;
 
-type Mode = "ui" | "chat";
-
 function App() {
   const [history, setHistory] = useState<ScreenDescription[]>([homeScreen]);
   const currentScreen = history[history.length - 1];
 
-  const [mode, setMode] = useState<Mode>("ui");
   const [chatInput, setChatInput] = useState("");
   const [systemPrompt, setSystemPrompt] = useState(
     "You are not browsing pages. You are shaping the interface. What do you want to see?"
   );
 
+  const [isChatOpen, setIsChatOpen] = useState(false);
+
   /**
    * Handle button clicks from the CDUI screen.
-   * - "talk_to_interface" opens the chat dock.
-   * - "download_cv" is still a mock for now.
    */
   const handleAction = (actionId: string) => {
     if (actionId === "talk_to_interface") {
-      setMode("chat");
+      setIsChatOpen(true);
+      // optional: scroll to bottom where the chat dock lives
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
       return;
     }
 
@@ -44,19 +43,21 @@ function App() {
   };
 
   /**
-   * Decide which screen to show based on the user's text command.
+   * Decide what to do with a text command.
    *
-   * - GO_BACK is handled locally by manipulating history.
-   * - In DEV: use the local rule-based engine (decideFromText).
-   * - In PROD: call the OpenAI-powered /api/brain and apply mutations.
+   * - Navigation intents (SHOW_*) and GO_BACK are handled LOCALLY in all envs.
+   * - In DEV: all other commands go through the local rule-based engine.
+   * - In PROD: other commands call the OpenAI brain for mutations,
+   *   with a fallback to the local rule-based engine on error.
    */
   const handleCommand = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
 
     const intent: Intent = parseIntent(trimmed);
+    const current = history[history.length - 1];
 
-    // GO_BACK stays handled here because it manipulates history directly
+    // --- GO_BACK: manipulate history directly, always local -----------------
     if (intent.type === "GO_BACK") {
       setHistory((prev) => {
         if (prev.length <= 1) return prev;
@@ -66,13 +67,34 @@ function App() {
       });
       setSystemPrompt("Went back to the previous view.");
       setChatInput("");
-      setMode("ui");
       return;
     }
 
-    const current = history[history.length - 1];
+    // --- Navigation intents: ALWAYS handled via local decideFromText --------
+    if (
+      intent.type === "SHOW_CV" ||
+      intent.type === "SHOW_PROJECTS" ||
+      intent.type === "SHOW_ANY_PROJECTS"
+    ) {
+      const result = decideFromText(trimmed, history);
 
-    // --- DEV / fallback path: local rule-based AI ---
+      if (result.kind === "push") {
+        setHistory((prev) => [...prev, result.screen]);
+        if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
+        setChatInput("");
+        return;
+      }
+
+      if (result.kind === "noop") {
+        setSystemPrompt(result.systemPrompt);
+        setChatInput("");
+        return;
+      }
+    }
+
+    // From here on, we treat it as a "refinement" command (no navigation).
+
+    // --- DEV / fallback path: local rule-based AI ---------------------------
     if (!IS_PROD) {
       const result = decideFromText(trimmed, history);
 
@@ -80,20 +102,19 @@ function App() {
         setHistory((prev) => [...prev, result.screen]);
         if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
         setChatInput("");
-        setMode("ui");
         return;
       }
 
       if (result.kind === "noop") {
         setSystemPrompt(result.systemPrompt);
-        // stay in chat so user can refine
+        setChatInput("");
         return;
       }
 
       return;
     }
 
-    // --- PROD path: call the OpenAI brain via /api/brain ---
+    // --- PROD path: call the OpenAI brain for mutations ---------------------
 
     const brain = await callBrain(trimmed, current, history);
 
@@ -106,19 +127,18 @@ function App() {
         setHistory((prev) => [...prev, result.screen]);
         if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
         setChatInput("");
-        setMode("ui");
         return;
       }
 
       if (result.kind === "noop") {
         setSystemPrompt(result.systemPrompt);
+        setChatInput("");
         return;
       }
 
       return;
     }
 
-    // Apply all mutations from the brain to the current screen
     const mutations = brain.mutations as ScreenMutation[];
 
     let nextScreen = current;
@@ -126,7 +146,6 @@ function App() {
       nextScreen = applyMutation(nextScreen, mutation);
     }
 
-    // Only push to history if something changed
     if (nextScreen !== current) {
       setHistory((prev) => [...prev, nextScreen]);
     }
@@ -136,7 +155,6 @@ function App() {
     }
 
     setChatInput("");
-    setMode("ui");
   };
 
   const handleChatSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
@@ -146,16 +164,14 @@ function App() {
 
   return (
     <div className="app-shell">
-      {/* Main UI area */}
       <div className="ui-region">
         <div className="ui-fullscreen">
           <ScreenRenderer screen={currentScreen} onAction={handleAction} />
         </div>
       </div>
 
-      {/* Chat dock (only visible when mode === "chat") */}
-      {mode === "chat" && (
-        <div className="chat-dock fade-in">
+      {isChatOpen && (
+        <div className="chat-dock">
           <div className="chat-box">
             <p className="chat-label">Interface</p>
             <p className="chat-system">{systemPrompt}</p>
@@ -174,7 +190,7 @@ function App() {
                   type="button"
                   onClick={() => {
                     setChatInput("");
-                    setMode("ui");
+                    setIsChatOpen(false);
                   }}
                 >
                   Close chat
