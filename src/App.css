@@ -53,21 +53,27 @@ body {
   }
 }
 
-/* ===== Avatar panel (pinned left) ===== */
+/* ===== Avatar column (card + talk button, pinned left) ===== */
 
-.avatar-panel {
+.avatar-column {
   position: fixed;          /* stays visible regardless of scroll */
   top: 2rem;
   left: 2rem;
   width: 340px;
   z-index: 9999;            /* above main content */
 
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Avatar card itself */
+.avatar-panel {
   background: white;
   border-radius: 12px;
   padding: 1rem 1.25rem;
-  box-shadow: 0 4px 30px rgba(0,0,0,0.08);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.08);
   border: 1px solid #eaeaea;
-
   animation: fadeIn 0.4s ease-out;
 }
 
@@ -107,8 +113,8 @@ body {
   color: #111827;
 }
 
+/* Talk button under the avatar card */
 .avatar-talk-wrapper {
-  margin-top: 0.75rem;
   display: flex;
   justify-content: flex-start;
 }
@@ -116,26 +122,28 @@ body {
 .avatar-talk-button {
   padding: 0.45rem 0.9rem;
   border-radius: 999px;
-  border: none;
+  border: 2px solid #111827;
   cursor: pointer;
   font-size: 0.85rem;
 
-  background: #111827;        /* dark pill, like old button */
-  color: #ffffff;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.25);
-  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+  background: transparent;
+  color: #111827;
+  box-shadow: none;
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out,
+    background-color 0.12s ease-out, color 0.12s ease-out;
 }
 
 .avatar-talk-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.3);
+  background: #111827;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.25);
 }
 
 .avatar-talk-button:active {
   transform: translateY(0);
   box-shadow: 0 5px 12px rgba(15, 23, 42, 0.2);
 }
-
 
 /* ===== Docked chat panel ===== */
 
@@ -461,7 +469,7 @@ ul {
 /* ===== Responsive: collapse avatar on small screens ===== */
 
 @media (max-width: 900px) {
-  .avatar-panel {
+  .avatar-column {
     position: static;
     width: auto;
     margin: 1rem;
@@ -471,62 +479,4 @@ ul {
     margin-left: 0;
     padding-top: 1rem;
   }
-}
-
-
-.avatar-cta {
-  margin-top: 0.75rem;
-  display: flex;
-  justify-content: flex-start;
-}
-
-.avatar-cta button {
-  padding: 0.45rem 0.9rem;
-  border-radius: 999px;
-  border: none;
-  cursor: pointer;
-  font-size: 0.85rem;
-
-  background: #2563eb;
-  color: #ffffff;
-  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
-  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
-}
-
-.avatar-cta button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.3);
-}
-
-.avatar-cta button:active {
-  transform: translateY(0);
-  box-shadow: 0 5px 12px rgba(37, 99, 235, 0.2);
-}
-.avatar-talk-wrapper {
-  margin-top: 0.75rem;
-  display: flex;
-  justify-content: flex-start;
-}
-
-.avatar-talk-button {
-  padding: 0.45rem 0.9rem;
-  border-radius: 999px;
-  border: none;
-  cursor: pointer;
-  font-size: 0.85rem;
-
-  background: #111827;
-  color: #ffffff;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.25);
-  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
-}
-
-.avatar-talk-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.3);
-}
-
-.avatar-talk-button:active {
-  transform: translateY(0);
-  box-shadow: 0 5px 12px rgba(15, 23, 42, 0.2);
 }

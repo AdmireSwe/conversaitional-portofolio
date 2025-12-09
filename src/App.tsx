@@ -5,7 +5,7 @@ import "./App.css";
 import { ScreenRenderer } from "./cdui/components/ScreenRenderer";
 import type { ScreenDescription, ScreenMutation } from "./cdui/types";
 import { parseIntent, type Intent } from "./cdui/intent";
-import { homeScreen } from "./cdui/screens";
+import { homeScreen, cvScreen } from "./cdui/screens";
 import { decideFromText } from "./cdui/ai";
 import { callBrain } from "./cdui/brainClient";
 import { callAvatar } from "./cdui/avatarClient";
@@ -46,19 +46,40 @@ function App() {
 
     // GO BACK locally
     if (intent.type === "GO_BACK") {
-      setHistory((prev) => {
-        if (prev.length <= 1) return prev;
-        const copy = [...prev];
-        copy.pop();
-        return copy;
-      });
+      const prevHistory =
+        history.length > 1 ? history.slice(0, history.length - 1) : history;
+
+      setHistory(prevHistory);
       setSystemPrompt("Went back to the previous view.");
       setChatInput("");
 
       setAvatarThinking(true);
       try {
-        const avatar = await callAvatar(trimmed, current, history, {
+        const avatar = await callAvatar(trimmed, current, prevHistory, {
           systemPrompt: "User navigated back to previous view.",
+        });
+        if (avatar?.narration) {
+          setAvatarNarration(avatar.narration);
+        }
+      } finally {
+        setAvatarThinking(false);
+      }
+      return;
+    }
+
+    // SHOW_CV should always push the dedicated CV screen (dev + prod)
+    if (intent.type === "SHOW_CV") {
+      const nextScreen = cvScreen;
+      const newHistory = [...history, nextScreen];
+
+      setHistory(newHistory);
+      setSystemPrompt("Showing CV overview. You can ask for details or another view.");
+      setChatInput("");
+
+      setAvatarThinking(true);
+      try {
+        const avatar = await callAvatar(trimmed, nextScreen, newHistory, {
+          systemPrompt: "User requested the CV view.",
         });
         if (avatar?.narration) {
           setAvatarNarration(avatar.narration);
@@ -151,32 +172,34 @@ function App() {
 
   return (
     <div className="app-shell">
-      {/* Avatar pinned on the left */}
-      <div className="avatar-panel">
-        <div className="avatar-header">
-          <span className="avatar-icon" role="img" aria-label="Interface avatar">
-            🤖
-          </span>
-          <div>
-            <div className="avatar-title">Interface avatar</div>
-            <div className="avatar-subtitle">
-              {avatarThinking
-                ? "Thinking about how to reshape the interface..."
-                : "Ask me how to explore Admir’s work."}
+      {/* Avatar + talk button pinned on the left */}
+      <div className="avatar-column">
+        <div className="avatar-panel">
+          <div className="avatar-header">
+            <span className="avatar-icon" role="img" aria-label="Interface avatar">
+              🤖
+            </span>
+            <div>
+              <div className="avatar-title">Interface avatar</div>
+              <div className="avatar-subtitle">
+                {avatarThinking
+                  ? "Thinking about how to reshape the interface..."
+                  : "Ask me how to explore Admir’s work."}
+              </div>
             </div>
+          </div>
+
+          <div className="avatar-body">
+            {avatarNarration ?? (
+              <span>
+                I am the Conversationally-Driven UI (CDUI) avatar. Tell me what
+                you want to see, and I’ll help this interface adapt.
+              </span>
+            )}
           </div>
         </div>
 
-        <div className="avatar-body">
-          {avatarNarration ?? (
-            <span>
-              I am the Conversationally-Driven UI (CDUI) avatar. Tell me what
-              you want to see, and I’ll help this interface adapt.
-            </span>
-          )}
-        </div>
-
-        {/* TALK BUTTON UNDER THE BUBBLE */}
+        {/* TALK BUTTON UNDER THE AVATAR CARD */}
         <div className="avatar-talk-wrapper">
           <button
             type="button"
