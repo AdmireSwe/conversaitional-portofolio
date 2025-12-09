@@ -1,11 +1,11 @@
+// src/cdui/mutate.ts
 import type {
     ScreenDescription,
     ScreenMutation,
     TimelineEntry,
   } from "./types";
   
-
-export function applyMutation(
+  export function applyMutation(
     screen: ScreenDescription,
     mutation: ScreenMutation
   ): ScreenDescription {
@@ -21,46 +21,52 @@ export function applyMutation(
       case "ADD_TIMELINE_ENTRY":
         return addTimelineEntry(screen, mutation.entry);
       case "FILTER_PROJECTS":
-        return filterProjects(screen, mutation.tech);  
+        return filterProjects(screen, mutation.tech);
+      case "ADD_INFO":
+        return addInfoCard(screen, mutation.title, mutation.body);
       default:
         return screen;
     }
   }
   
-
-// -------- TAG OPERATIONS --------
-
-function addTag(screen: ScreenDescription, tag: string): ScreenDescription {
-  return {
-    ...screen,
-    widgets: screen.widgets.map((w) =>
-      w.type === "tag_list"
-        ? {
-            ...w,
-            tags: w.tags.includes(tag) ? w.tags : [...w.tags, tag],
-          }
-        : w
-    ),
-  };
-}
-
-function removeTag(screen: ScreenDescription, tag: string): ScreenDescription {
-  return {
-    ...screen,
-    widgets: screen.widgets.map((w) =>
-      w.type === "tag_list"
-        ? {
-            ...w,
-            tags: w.tags.filter((t) => t.toLowerCase() !== tag.toLowerCase()),
-          }
-        : w
-    ),
-  };
-}
-
-// -------- SKILL MATRIX OPERATIONS --------
-
-function addSkill(
+  // -------- TAG OPERATIONS --------
+  
+  function addTag(screen: ScreenDescription, tag: string): ScreenDescription {
+    return {
+      ...screen,
+      widgets: screen.widgets.map((w) =>
+        w.type === "tag_list"
+          ? {
+              ...w,
+              tags: w.tags.includes(tag) ? w.tags : [...w.tags, tag],
+            }
+          : w
+      ),
+    };
+  }
+  
+  function removeTag(
+    screen: ScreenDescription,
+    tag: string
+  ): ScreenDescription {
+    return {
+      ...screen,
+      widgets: screen.widgets.map((w) =>
+        w.type === "tag_list"
+          ? {
+              ...w,
+              tags: w.tags.filter(
+                (t) => t.toLowerCase() !== tag.toLowerCase()
+              ),
+            }
+          : w
+      ),
+    };
+  }
+  
+  // -------- SKILL MATRIX OPERATIONS --------
+  
+  function addSkill(
     screen: ScreenDescription,
     area: string,
     skill: string
@@ -80,7 +86,6 @@ function addSkill(
               row.area.toLowerCase().includes(areaLower);
   
             if (!rowMatches) return row;
-  
             if (row.skills.includes(skill)) return row;
   
             return {
@@ -123,10 +128,10 @@ function addSkill(
       }),
     };
   }
-
+  
   // -------- TIMELINE OPERATIONS --------
-
-function addTimelineEntry(
+  
+  function addTimelineEntry(
     screen: ScreenDescription,
     entry: TimelineEntry
   ): ScreenDescription {
@@ -142,10 +147,10 @@ function addTimelineEntry(
       }),
     };
   }
-
+  
   // -------- PROJECT FILTERING --------
-
-function filterProjects(
+  
+  function filterProjects(
     screen: ScreenDescription,
     tech: string
   ): ScreenDescription {
@@ -159,12 +164,32 @@ function filterProjects(
         return {
           ...w,
           projects: w.projects.filter((proj) =>
-            proj.techStack.some((t) => t.toLowerCase().includes(techLower))
+            proj.techStack.some((t) =>
+              t.toLowerCase().includes(techLower)
+            )
           ),
         };
       }),
     };
   }
   
+  // -------- INFO CARD --------
   
+  function addInfoCard(
+    screen: ScreenDescription,
+    title: string,
+    body: string
+  ): ScreenDescription {
+    return {
+      ...screen,
+      widgets: [
+        {
+          type: "info_card",
+          title,
+          body,
+        },
+        ...screen.widgets,
+      ],
+    };
+  }
   

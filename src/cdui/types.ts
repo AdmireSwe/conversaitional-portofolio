@@ -2,12 +2,11 @@
 
 import type { Project } from "./projects";
 
-
 /** Every screen is a state the UI can be in */
 export interface ScreenDescription {
-  screenId: string;                 // Unique identifier for this screen
-  layout: "column" | "row";         // Basic layout direction
-  widgets: Widget[];                // What appears on this screen
+  screenId: string; // Unique identifier for this screen
+  layout: "column" | "row"; // Basic layout direction
+  widgets: Widget[]; // What appears on this screen
 }
 
 /** A widget is a UI building block */
@@ -20,7 +19,6 @@ export type Widget =
   | TimelineWidget
   | SkillMatrixWidget;
 
-
 /** Simple text element */
 export interface TextWidget {
   type: "text";
@@ -29,9 +27,9 @@ export interface TextWidget {
 }
 
 export interface SkillMatrixRow {
-  area: string;       // e.g. "Frontend", "Backend"
-  skills: string[];   // e.g. ["React", "TypeScript"]
-  level?: string;     // e.g. "solid", "learning", "advanced"
+  area: string; // e.g. "Frontend", "Backend"
+  skills: string[]; // e.g. ["React", "TypeScript"]
+  level?: string; // e.g. "solid", "learning", "advanced"
 }
 
 export interface SkillMatrixWidget {
@@ -40,7 +38,6 @@ export interface SkillMatrixWidget {
   rows: SkillMatrixRow[];
 }
 
-
 /** A horizontal row of buttons the user can click */
 export interface ButtonRowWidget {
   type: "button_row";
@@ -48,8 +45,8 @@ export interface ButtonRowWidget {
 }
 
 export interface Button {
-  id: string;       // action identifier
-  label: string;    // text shown to the user
+  id: string; // action identifier
+  label: string; // text shown to the user
 }
 
 /** A list of projects (for your portfolio) */
@@ -99,13 +96,13 @@ export type ScreenMutation =
   | { kind: "ADD_SKILL"; area: string; skill: string }
   | { kind: "CHANGE_LEVEL"; area: string; level: string }
   | { kind: "ADD_TIMELINE_ENTRY"; entry: TimelineEntry }
-  | { kind: "FILTER_PROJECTS"; tech: string };
-
-
-
+  | { kind: "FILTER_PROJECTS"; tech: string }
+  | { kind: "ADD_INFO"; title: string; body: string }; // 👈 NEW
 
 // Helper to convert Project[] into a ProjectListWidget
-export function projectListFromProjects(projects: Project[]): ProjectListWidget {
+export function projectListFromProjects(
+  projects: Project[]
+): ProjectListWidget {
   return {
     type: "project_list",
     projects: projects.map((p) => ({
@@ -115,4 +112,3 @@ export function projectListFromProjects(projects: Project[]): ProjectListWidget 
     })),
   };
 }
-

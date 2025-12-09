@@ -27,7 +27,11 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
         display: "flex",
         flexDirection: screen.layout, // "column" or "row"
         gap: "1rem",
-        padding: "1rem",
+        padding: "1.5rem",
+        width: "100%",
+        height: "100%",
+        boxSizing: "border-box",
+        overflowY: "auto",
       }}
     >
       {screen.widgets.map((widget, index) => (
@@ -85,7 +89,8 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({
         <ul style={{ paddingLeft: "1.2rem" }}>
           {widget.projects.map((proj) => (
             <li key={proj.id}>
-              <strong>{proj.name}</strong> — [{proj.techStack.join(", ")}]
+              <strong>{proj.name}</strong> — [
+              {proj.techStack.join(", ")}]
             </li>
           ))}
         </ul>
@@ -108,65 +113,72 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({
           <div className="tag-list-tags">
             {widget.tags.map((tag) => (
               <span key={tag} className="tag-chip">
-                {tag}</span>
+                {tag}
+              </span>
             ))}
           </div>
         </div>
       );
 
-      case "timeline":
-        return (
-          <div className="timeline">
-            <h2 className="timeline-title">{widget.title}</h2>
-            <ul className="timeline-list">
-              {widget.entries.map((entry) => (
-                <li key={entry.id} className="timeline-item">
-                  <div className="timeline-dot" />
-                  <div className="timeline-content">
-                    <div className="timeline-header">
-                      <span className="timeline-period">{entry.period}</span>
-                      <span className="timeline-title-text">{entry.title}</span>
-                    </div>
-                    {entry.subtitle && (
-                      <div className="timeline-subtitle">{entry.subtitle}</div>
-                    )}
-                    {entry.description && (
-                      <div className="timeline-description">
-                        {entry.description}
-                      </div>
-                    )}
+    case "timeline":
+      return (
+        <div className="timeline">
+          <h2 className="timeline-title">{widget.title}</h2>
+          <ul className="timeline-list">
+            {widget.entries.map((entry) => (
+              <li key={entry.id} className="timeline-item">
+                <div className="timeline-dot" />
+                <div className="timeline-content">
+                  <div className="timeline-header">
+                    <span className="timeline-period">
+                      {entry.period}
+                    </span>
+                    <span className="timeline-title-text">
+                      {entry.title}
+                    </span>
                   </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
+                  {entry.subtitle && (
+                    <div className="timeline-subtitle">
+                      {entry.subtitle}
+                    </div>
+                  )}
+                  {entry.description && (
+                    <div className="timeline-description">
+                      {entry.description}
+                    </div>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
 
-        case "skill_matrix":
-          return (
-            <div className="skill-matrix">
-              <h2 className="skill-matrix-title">{widget.title}</h2>
-              <div className="skill-matrix-grid">
-                {widget.rows.map((row) => (
-                  <div key={row.area} className="skill-matrix-row">
-                    <div className="skill-matrix-area">{row.area}</div>
-                    <div className="skill-matrix-skills">
-                      {row.skills.map((skill) => (
-                        <span key={skill} className="skill-chip">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                    {row.level && (
-                      <div className="skill-matrix-level">{row.level}</div>
-                    )}
+    case "skill_matrix":
+      return (
+        <div className="skill-matrix">
+          <h2 className="skill-matrix-title">{widget.title}</h2>
+          <div className="skill-matrix-grid">
+            {widget.rows.map((row) => (
+              <div key={row.area} className="skill-matrix-row">
+                <div className="skill-matrix-area">{row.area}</div>
+                <div className="skill-matrix-skills">
+                  {row.skills.map((skill) => (
+                    <span key={skill} className="skill-chip">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+                {row.level && (
+                  <div className="skill-matrix-level">
+                    {row.level}
                   </div>
-                ))}
+                )}
               </div>
-            </div>
-          );
-    
-  
+            ))}
+          </div>
+        </div>
+      );
 
     default:
       // This should never happen if Widget union in types.ts is correct

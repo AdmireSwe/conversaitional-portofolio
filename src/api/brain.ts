@@ -44,13 +44,30 @@ Valid mutations:
   }
 }
 
+7) Add an informational card that explains what changed:
+{
+  "kind": "ADD_INFO",
+  "title": "<short summary>",
+  "body": "<one or two sentences explaining what you changed in the interface>"
+}
+
 You MUST NOT invent any new mutation kinds.
 You MUST NOT return HTML or JSX.
 You MUST ONLY use the mutation formats listed above.
 
+You SHOULD usually:
+- Produce one or more "real" mutations (tags, skills, filters, etc.)
+- ALSO produce at least one "ADD_INFO" mutation summarizing the change for the user.
+
 If you are not sure what to do, answer with:
 {
-  "mutations": [],
+  "mutations": [
+    {
+      "kind": "ADD_INFO",
+      "title": "I need more details",
+      "body": "I am not sure what change you want. Please be more specific."
+    }
+  ],
   "systemPrompt": "I need more details to decide how to change the interface."
 }
 `;

@@ -11,7 +11,6 @@ body {
   height: 100%;
 }
 
-
 /* Fullscreen CDUI UI mode */
 .ui-fullscreen {
   min-height: 100vh;
@@ -19,14 +18,27 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+
+  animation: cduiFadeIn 0.35s ease-out;
+}
+
+@keyframes cduiFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .chat-fullscreen {
-  position: fixed;      /* <-- critical */
+  position: fixed; /* <-- critical */
   top: 0;
   left: 0;
-  width: 100vw;         /* <-- full viewport width */
-  height: 100vh;        /* <-- full viewport height */
+  width: 100vw; /* <-- full viewport width */
+  height: 100vh; /* <-- full viewport height */
 
   display: flex;
   align-items: center;
@@ -37,8 +49,6 @@ body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
 }
-
-
 
 .chat-box {
   max-width: 700px;
@@ -278,4 +288,3 @@ ul {
   text-align: right;
   color: #64748b;
 }
-
