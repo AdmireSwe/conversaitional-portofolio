@@ -14,35 +14,6 @@ body {
 .app-shell {
   min-height: 100vh;
   background: #f9fafb;
-}
-
-/* main two-column layout: avatar left, content right */
-.app-main {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem 1.5rem 5rem;
-  display: flex;
-  gap: 2rem;
-  align-items: flex-start;
-}
-
-/* avatar stays pinned while content scrolls */
-.avatar-column {
-  flex: 0 0 280px;
-  position: sticky;
-  top: 1.5rem;
-  align-self: flex-start;
-}
-
-/* main CDUI content */
-.content-column {
-  flex: 1 1 auto;
-}
-
-
-.app-shell {
-  min-height: 100vh;
-  background: #f9fafb;
   color: #0f172a;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -56,13 +27,18 @@ body {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 2.5rem 1.5rem 7rem; /* room at bottom for docked chat */
+  padding: 2.5rem 1.5rem 7rem;
+  /* leave space on the left so we don't sit under the avatar */
+  margin-left: 380px;
 }
 
 /* Screen container with subtle fade-in */
 .ui-fullscreen {
   width: 100%;
   max-width: 960px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
   animation: cduiFadeIn 0.35s ease-out;
 }
 
@@ -77,9 +53,93 @@ body {
   }
 }
 
+/* ===== Avatar panel (pinned left) ===== */
+
+.avatar-panel {
+  position: fixed;          /* stays visible regardless of scroll */
+  top: 2rem;
+  left: 2rem;
+  width: 340px;
+  z-index: 9999;            /* above main content */
+
+  background: white;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 4px 30px rgba(0,0,0,0.08);
+  border: 1px solid #eaeaea;
+
+  animation: fadeIn 0.4s ease-out;
+}
+
+/* nice fade-in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.avatar-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.09em;
+  color: #4f46e5;
+}
+
+.avatar-icon {
+  font-size: 1.4rem;
+}
+
+.avatar-title {
+  font-weight: 600;
+}
+
+.avatar-subtitle {
+  font-size: 0.75rem;
+  text-transform: none;
+  color: #4b5563;
+}
+
+.avatar-body {
+  font-size: 0.9rem;
+  color: #111827;
+}
+
+.avatar-talk-wrapper {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.avatar-talk-button {
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+
+  background: #111827;        /* dark pill, like old button */
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.25);
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+}
+
+.avatar-talk-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.3);
+}
+
+.avatar-talk-button:active {
+  transform: translateY(0);
+  box-shadow: 0 5px 12px rgba(15, 23, 42, 0.2);
+}
+
+
 /* ===== Docked chat panel ===== */
 
-/* Chat dock is fixed at the bottom, but only as a centered card */
+/* Chat dock is fixed at the bottom, centered card */
 .chat-dock {
   position: fixed;
   left: 0;
@@ -90,9 +150,17 @@ body {
   pointer-events: none; /* let only the box receive clicks */
 }
 
-/* Hidden state (when chatVisible === false) */
-.chat-dock.hidden {
-  display: none;
+/* Hidden/visible states controlled from React */
+.chat-dock-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(12px);
+}
+
+.chat-dock-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 /* The actual chat card */
@@ -390,11 +458,75 @@ ul {
   color: #64748b;
 }
 
+/* ===== Responsive: collapse avatar on small screens ===== */
 
-.ui-fullscreen {
-  width: 100%;
+@media (max-width: 900px) {
+  .avatar-panel {
+    position: static;
+    width: auto;
+    margin: 1rem;
+  }
+
+  .ui-region {
+    margin-left: 0;
+    padding-top: 1rem;
+  }
+}
+
+
+.avatar-cta {
+  margin-top: 0.75rem;
   display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  animation: cduiFadeIn 0.35s ease-out;
+  justify-content: flex-start;
+}
+
+.avatar-cta button {
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+}
+
+.avatar-cta button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.3);
+}
+
+.avatar-cta button:active {
+  transform: translateY(0);
+  box-shadow: 0 5px 12px rgba(37, 99, 235, 0.2);
+}
+.avatar-talk-wrapper {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.avatar-talk-button {
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+
+  background: #111827;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.25);
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+}
+
+.avatar-talk-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.3);
+}
+
+.avatar-talk-button:active {
+  transform: translateY(0);
+  box-shadow: 0 5px 12px rgba(15, 23, 42, 0.2);
 }

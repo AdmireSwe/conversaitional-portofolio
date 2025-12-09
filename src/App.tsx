@@ -3,13 +3,12 @@ import React, { useState } from "react";
 import "./App.css";
 
 import { ScreenRenderer } from "./cdui/components/ScreenRenderer";
-import { AvatarPanel } from "./cdui/components/AvatarPanel";
-
 import type { ScreenDescription, ScreenMutation } from "./cdui/types";
 import { parseIntent, type Intent } from "./cdui/intent";
 import { homeScreen } from "./cdui/screens";
 import { decideFromText } from "./cdui/ai";
-import { callBrain, type AvatarMood, type AvatarAnimation } from "./cdui/brainClient";
+import { callBrain } from "./cdui/brainClient";
+import { callAvatar } from "./cdui/avatarClient";
 import { applyMutation } from "./cdui/mutate";
 
 const IS_PROD = import.meta.env.PROD;
@@ -23,26 +22,12 @@ function App() {
     "You are not browsing pages. You are shaping the interface. What do you want to see?"
   );
 
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [avatarNarration, setAvatarNarration] = useState<string | null>(null);
+  const [avatarThinking, setAvatarThinking] = useState(false);
+  const [showChat, setShowChat] = useState(false);
 
-  // Avatar state: what it "says" and how it "feels"
-  const [avatarNarration, setAvatarNarration] = useState<string>(
-    "Hi, I’m the CDUI avatar. Tell me what you want to see, and I’ll reshape this portfolio interface."
-  );
-  const [avatarMood, setAvatarMood] = useState<AvatarMood>("neutral");
-  const [avatarAnimation, setAvatarAnimation] =
-    useState<AvatarAnimation>("idle");
-
-  /**
-   * Handle button clicks from the CDUI screen.
-   */
+  // --- button clicks from the CDUI screen (right column) ---
   const handleAction = (actionId: string) => {
-    if (actionId === "talk_to_interface") {
-      setIsChatOpen(true);
-      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-      return;
-    }
-
     if (actionId === "download_cv") {
       alert("This will trigger a real CV download in a later version.");
       return;
@@ -51,61 +36,15 @@ function App() {
     console.log("Unhandled action:", actionId);
   };
 
-  /**
-   * Decide what to do with a text command.
-   */
+  // --- main command handler for the chat input ---
   const handleCommand = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
 
-    const lower = trimmed.toLowerCase();
-
-// --- Avatar-only Q&A: "who are you?" etc. ---
-if (
-  lower.includes("who are you") ||
-  lower.includes("what are you") ||
-  lower.includes("who is this") ||
-  lower.includes("about this interface")
-) {
-  setAvatarNarration(
-    "I am the Conversationally-Driven UI (CDUI) avatar. I translate your natural language into changes in this portfolio’s interface. " +
-      "Instead of browsing static pages, you can just tell me what you want to see, and I’ll reshape the view for you."
-  );
-  setSystemPrompt(
-    "You are talking to the CDUI avatar. Ask for portfolio-related views like Java projects, backend work, CV, or refinements of what you see."
-  );
-  setAvatarMood("curious");
-  setAvatarAnimation("presenting");
-  setChatInput("");
-  return;
-}
-
-// --- Hard off-topic rejection, e.g. recipes ---
-if (
-  lower.includes("recipe") ||
-  lower.includes("cook") ||
-  lower.includes("bake") ||
-  lower.includes("pie")
-) {
-  setAvatarNarration(
-    "This interface is designed to manage and display portfolio-related information. " +
-      "It cannot provide cooking recipes like cherry pie. " +
-      "If you’d like, I can instead show you how Admir approaches secure systems, testing, or other tech topics."
-  );
-  setSystemPrompt(
-    "Recipe request unsupported. Please ask for views or refinements related to this portfolio."
-  );
-  setAvatarMood("skeptical");
-  setAvatarAnimation("thinking");
-  setChatInput("");
-  return;
-}
-
-
     const intent: Intent = parseIntent(trimmed);
-    const current = history[history.length - 1];
+    const current = currentScreen;
 
-    // --- GO_BACK: manipulate history directly
+    // GO BACK locally
     if (intent.type === "GO_BACK") {
       setHistory((prev) => {
         if (prev.length <= 1) return prev;
@@ -114,138 +53,95 @@ if (
         return copy;
       });
       setSystemPrompt("Went back to the previous view.");
-      setAvatarNarration("I restored the previous screen for you.");
-      setAvatarMood("neutral");
-      setAvatarAnimation("presenting");
       setChatInput("");
+
+      setAvatarThinking(true);
+      try {
+        const avatar = await callAvatar(trimmed, current, history, {
+          systemPrompt: "User navigated back to previous view.",
+        });
+        if (avatar?.narration) {
+          setAvatarNarration(avatar.narration);
+        }
+      } finally {
+        setAvatarThinking(false);
+      }
       return;
     }
 
-    // --- Navigation intents: handled via local decideFromText
-    if (
-      intent.type === "SHOW_CV" ||
-      intent.type === "SHOW_PROJECTS" ||
-      intent.type === "SHOW_ANY_PROJECTS"
-    ) {
-      const result = decideFromText(trimmed, history);
+    // from here on: compiler + avatar
+    setAvatarThinking(true);
 
-      if (result.kind === "push") {
-        setHistory((prev) => [...prev, result.screen]);
-        if (result.systemPrompt) {
-          setSystemPrompt(result.systemPrompt);
-          setAvatarNarration(result.systemPrompt);
-          setAvatarMood("curious");
-          setAvatarAnimation("presenting");
-        }
-        setChatInput("");
-        return;
-      }
+    let compilerSystemPrompt: string | undefined;
+    let compilerMutations: ScreenMutation[] | undefined;
+    let screenAfterCompiler: ScreenDescription = current;
 
-      if (result.kind === "noop") {
-        setSystemPrompt(result.systemPrompt);
-        setAvatarNarration(result.systemPrompt);
-        setAvatarMood("neutral");
-        setAvatarAnimation("thinking");
-        setChatInput("");
-        return;
-      }
-    }
-
-    // From here: refinement commands (no explicit navigation)
-
-    // --- DEV / fallback path: local rule-based AI
+    // --- compiler path ---
     if (!IS_PROD) {
+      // local rule-based AI
       const result = decideFromText(trimmed, history);
 
       if (result.kind === "push") {
+        compilerSystemPrompt = result.systemPrompt;
+        screenAfterCompiler = result.screen;
         setHistory((prev) => [...prev, result.screen]);
-        if (result.systemPrompt) {
-          setSystemPrompt(result.systemPrompt);
-          setAvatarNarration(result.systemPrompt);
-          setAvatarMood("curious");
-          setAvatarAnimation("presenting");
-        }
-        setChatInput("");
-        return;
-      }
-
-      if (result.kind === "noop") {
+        if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
+      } else {
+        compilerSystemPrompt = result.systemPrompt;
         setSystemPrompt(result.systemPrompt);
-        setAvatarNarration(result.systemPrompt);
-        setAvatarMood("neutral");
-        setAvatarAnimation("thinking");
-        setChatInput("");
-        return;
-      }
-
-      return;
-    }
-
-    // --- PROD path: call the OpenAI brain for mutations + avatar info
-    const brain = await callBrain(trimmed, current, history);
-
-    if (!brain) {
-      console.warn("Brain returned null, falling back to local AI.");
-      const result = decideFromText(trimmed, history);
-
-      if (result.kind === "push") {
-        setHistory((prev) => [...prev, result.screen]);
-        if (result.systemPrompt) {
-          setSystemPrompt(result.systemPrompt);
-          setAvatarNarration(result.systemPrompt);
-          setAvatarMood("curious");
-          setAvatarAnimation("presenting");
-        }
-        setChatInput("");
-        return;
-      }
-
-      if (result.kind === "noop") {
-        setSystemPrompt(result.systemPrompt);
-        setAvatarNarration(result.systemPrompt);
-        setAvatarMood("neutral");
-        setAvatarAnimation("thinking");
-        setChatInput("");
-        return;
-      }
-
-      return;
-    }
-
-    const mutations = brain.mutations as ScreenMutation[];
-
-    let nextScreen = current;
-    for (const mutation of mutations) {
-      nextScreen = applyMutation(nextScreen, mutation);
-    }
-
-    if (nextScreen !== current) {
-      setHistory((prev) => [...prev, nextScreen]);
-    }
-
-    if (brain.systemPrompt) {
-      setSystemPrompt(brain.systemPrompt);
-    }
-
-    if (brain.avatarNarration) {
-      setAvatarNarration(brain.avatarNarration);
-    } else if (brain.systemPrompt) {
-      setAvatarNarration(brain.systemPrompt);
-    }
-
-    if (brain.avatarState) {
-      if (brain.avatarState.mood) {
-        setAvatarMood(brain.avatarState.mood);
-      }
-      if (brain.avatarState.animation) {
-        setAvatarAnimation(brain.avatarState.animation);
       }
     } else {
-      setAvatarMood("neutral");
-      setAvatarAnimation("idle");
+      // OpenAI brain
+      const brain = await callBrain(trimmed, current, history);
+
+      if (!brain) {
+        console.warn("Brain returned null, falling back to local AI.");
+        const result = decideFromText(trimmed, history);
+
+        if (result.kind === "push") {
+          compilerSystemPrompt = result.systemPrompt;
+          screenAfterCompiler = result.screen;
+          setHistory((prev) => [...prev, result.screen]);
+          if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
+        } else {
+          compilerSystemPrompt = result.systemPrompt;
+          setSystemPrompt(result.systemPrompt);
+        }
+      } else {
+        compilerSystemPrompt = brain.systemPrompt;
+        const mutations = (brain.mutations ?? []) as ScreenMutation[];
+        compilerMutations = mutations;
+
+        let nextScreen = current;
+        for (const m of mutations) {
+          nextScreen = applyMutation(nextScreen, m);
+        }
+        screenAfterCompiler = nextScreen;
+
+        if (nextScreen !== current) {
+          setHistory((prev) => [...prev, nextScreen]);
+        }
+        if (brain.systemPrompt) {
+          setSystemPrompt(brain.systemPrompt);
+        }
+      }
     }
 
     setChatInput("");
+
+    // --- avatar narration ---
+    try {
+      const avatar = await callAvatar(trimmed, screenAfterCompiler, history, {
+        systemPrompt: compilerSystemPrompt,
+        mutations: compilerMutations,
+      });
+
+      if (avatar?.narration) {
+        setAvatarNarration(avatar.narration);
+      }
+    } finally {
+      setAvatarThinking(false);
+    }
   };
 
   const handleChatSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
@@ -253,30 +149,60 @@ if (
     void handleCommand(chatInput);
   };
 
- return (
-  <div className="app-shell">
-    <div className="app-main">
-      {/* Left column: avatar, pinned */}
-      <aside className="avatar-column">
-        <AvatarPanel
-          narration={avatarNarration}
-          mood={avatarMood}
-          animation={avatarAnimation}
-        />
-      </aside>
+  return (
+    <div className="app-shell">
+      {/* Avatar pinned on the left */}
+      <div className="avatar-panel">
+        <div className="avatar-header">
+          <span className="avatar-icon" role="img" aria-label="Interface avatar">
+            🤖
+          </span>
+          <div>
+            <div className="avatar-title">Interface avatar</div>
+            <div className="avatar-subtitle">
+              {avatarThinking
+                ? "Thinking about how to reshape the interface..."
+                : "Ask me how to explore Admir’s work."}
+            </div>
+          </div>
+        </div>
 
-      {/* Right column: the CDUI screen */}
-      <main className="content-column">
+        <div className="avatar-body">
+          {avatarNarration ?? (
+            <span>
+              I am the Conversationally-Driven UI (CDUI) avatar. Tell me what
+              you want to see, and I’ll help this interface adapt.
+            </span>
+          )}
+        </div>
+
+        {/* TALK BUTTON UNDER THE BUBBLE */}
+        <div className="avatar-talk-wrapper">
+          <button
+            type="button"
+            className="avatar-talk-button"
+            onClick={() => setShowChat(true)}
+          >
+            Talk to the interface
+          </button>
+        </div>
+      </div>
+
+      {/* Main UI region (right side) */}
+      <div className="ui-region">
         <div className="ui-fullscreen">
           <ScreenRenderer screen={currentScreen} onAction={handleAction} />
         </div>
-      </main>
-    </div>
+      </div>
 
-    {isChatOpen && (
-      <div className="chat-dock">
+      {/* Chat dock at the bottom */}
+      <div
+        className={`chat-dock ${
+          showChat ? "chat-dock-visible" : "chat-dock-hidden"
+        }`}
+      >
         <div className="chat-box">
-          <p className="chat-label">INTERFACE</p>
+          <p className="chat-label">Interface</p>
           <p className="chat-system">{systemPrompt}</p>
 
           <form onSubmit={handleChatSubmit} className="chat-form">
@@ -285,15 +211,14 @@ if (
               placeholder="Describe how you want the interface to change..."
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              autoFocus
             />
             <div className="chat-buttons">
               <button type="submit">Commit change</button>
               <button
                 type="button"
                 onClick={() => {
+                  setShowChat(false);
                   setChatInput("");
-                  setIsChatOpen(false);
                 }}
               >
                 Close chat
@@ -302,10 +227,8 @@ if (
           </form>
         </div>
       </div>
-    )}
-  </div>
-);
-
+    </div>
+  );
 }
 
 export default App;
