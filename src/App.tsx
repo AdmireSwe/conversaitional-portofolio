@@ -1,68 +1,18 @@
+// src/App.tsx
 import React, { useState } from "react";
 import "./App.css";
 
 import { ScreenRenderer } from "./cdui/components/ScreenRenderer";
 import type { ScreenDescription, ScreenMutation } from "./cdui/types";
-import { applyMutation } from "./cdui/mutate";
 import { parseIntent, type Intent } from "./cdui/intent";
 import { homeScreen } from "./cdui/screens";
-import { decideFromText, type AIResult } from "./cdui/ai";
+import { decideFromText } from "./cdui/ai";
+import { callBrain } from "./cdui/brainClient";
+import { applyMutation } from "./cdui/mutate";
 
 type Mode = "ui" | "chat";
 
 const IS_PROD = import.meta.env.PROD;
-
-interface BrainResponse {
-  mutations: ScreenMutation[];
-  systemPrompt?: string;
-}
-
-/**
- * In production on Vercel:
- *   - calls /api/brain, which uses OpenAI and returns mutations.
- *
- * In local dev:
- *   - returns null so we fall back to the local rule engine.
- */
-async function callBrain(
-  text: string,
-  currentScreen: ScreenDescription,
-  history: ScreenDescription[]
-): Promise<BrainResponse | null> {
-  if (!IS_PROD) {
-    // Local development: don't call remote AI, keep things cheap & simple.
-    return null;
-  }
-
-  try {
-    const response = await fetch("/api/brain", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text,
-        currentScreen,
-        history: history.map((h) => h.screenId),
-      }),
-    });
-
-    if (!response.ok) {
-      console.warn("Brain responded with non-OK status:", response.status);
-      return null;
-    }
-
-    const data = await response.json();
-
-    if (!data || !Array.isArray(data.mutations)) {
-      console.warn("Brain returned invalid payload:", data);
-      return null;
-    }
-
-    return data as BrainResponse;
-  } catch (err) {
-    console.error("callBrain failed:", err);
-    return null;
-  }
-}
 
 function App() {
   const [mode, setMode] = useState<Mode>("ui");
@@ -76,30 +26,39 @@ function App() {
 
   /**
    * Handle button clicks from the CDUI screen.
+   * For now there's only one special button: "talk_to_interface".
    */
   const handleAction = (actionId: string) => {
     if (actionId === "talk_to_interface") {
+      // Switch into full-screen chat mode
       setMode("chat");
       return;
     }
 
     if (actionId === "download_cv") {
+      // Mock CV download
       alert("This will trigger a real CV download in a later version.");
       return;
     }
 
+    // Later: other action IDs will be handled here.
     console.log("Unhandled action:", actionId);
   };
 
   /**
    * Decide which screen to show based on the user's text command.
-   * - GO_BACK stays local
-   * - Otherwise: try remote brain first (in prod), fall back to local rule engine
+   *
+   * - GO_BACK is handled locally by manipulating history.
+   * - In DEV: use the local rule-based engine (decideFromText).
+   * - In PROD: call the OpenAI-powered /api/brain and apply mutations.
    */
   const handleCommand = async (text: string) => {
-    const intent: Intent = parseIntent(text);
+    const trimmed = text.trim();
+    if (!trimmed) return;
 
-    // GO_BACK handled locally (no backend)
+    const intent: Intent = parseIntent(trimmed);
+
+    // GO_BACK stays handled here because it manipulates history directly
     if (intent.type === "GO_BACK") {
       setHistory((prev) => {
         if (prev.length <= 1) return prev;
@@ -113,54 +72,77 @@ function App() {
       return;
     }
 
-    // 1) Try remote brain (AI) — only does anything in production
-    const remote = await callBrain(text, currentScreen, history);
-    if (remote) {
-      const { mutations, systemPrompt } = remote;
+    // --- DEV / fallback path: local rule-based AI ---
+    if (!IS_PROD) {
+      const result = decideFromText(trimmed, history);
 
-      if (mutations.length > 0) {
-        // Apply all mutations sequentially to the current screen
-        const updatedScreen = mutations.reduce<ScreenDescription>(
-          (screen, mutation) => applyMutation(screen, mutation),
-          currentScreen
-        );
-
-        setHistory((prev) => [...prev, updatedScreen]);
-        if (systemPrompt) setSystemPrompt(systemPrompt);
+      if (result.kind === "push") {
+        setHistory((prev) => [...prev, result.screen]);
+        if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
         setMode("ui");
         setChatInput("");
         return;
       }
 
-      // No mutations but systemPrompt present → treat like a NOOP with message
-      if (systemPrompt) {
-        setSystemPrompt(systemPrompt);
-        setChatInput("");
+      if (result.kind === "noop") {
+        setSystemPrompt(result.systemPrompt);
         // stay in chat mode so user can refine
         return;
       }
-    }
 
-    // 2) Fallback: local rule-based engine
-    const result: AIResult = decideFromText(text, history);
-
-    if (result.kind === "push") {
-      setHistory((prev) => [...prev, result.screen]);
-      if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
-      setMode("ui");
-      setChatInput("");
       return;
     }
 
-    if (result.kind === "noop") {
-      setSystemPrompt(result.systemPrompt);
+    // --- PROD path: call the OpenAI brain via /api/brain ---
+
+    const current = history[history.length - 1];
+    const brain = await callBrain(trimmed, current, history);
+
+    // If brain failed or returned nothing useful, fall back to local rules
+    if (!brain) {
+      console.warn("Brain returned null, falling back to local AI.");
+      const result = decideFromText(trimmed, history);
+
+      if (result.kind === "push") {
+        setHistory((prev) => [...prev, result.screen]);
+        if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
+        setMode("ui");
+        setChatInput("");
+        return;
+      }
+
+      if (result.kind === "noop") {
+        setSystemPrompt(result.systemPrompt);
+        return;
+      }
+
       return;
     }
+
+    // Apply all mutations from the brain to the current screen
+    const mutations = brain.mutations as ScreenMutation[];
+
+    let nextScreen = current;
+    for (const mutation of mutations) {
+      nextScreen = applyMutation(nextScreen, mutation);
+    }
+
+    // Only push to history if something changed
+    if (nextScreen !== current) {
+      setHistory((prev) => [...prev, nextScreen]);
+    }
+
+    if (brain.systemPrompt) {
+      setSystemPrompt(brain.systemPrompt);
+    }
+
+    setMode("ui");
+    setChatInput("");
   };
 
-  const handleChatSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
+  const handleChatSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
     e.preventDefault();
-    await handleCommand(chatInput);
+    void handleCommand(chatInput);
   };
 
   // MODE: CHAT (full-screen)
