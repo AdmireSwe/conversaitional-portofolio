@@ -58,6 +58,50 @@ function App() {
     const trimmed = text.trim();
     if (!trimmed) return;
 
+    const lower = trimmed.toLowerCase();
+
+// --- Avatar-only Q&A: "who are you?" etc. ---
+if (
+  lower.includes("who are you") ||
+  lower.includes("what are you") ||
+  lower.includes("who is this") ||
+  lower.includes("about this interface")
+) {
+  setAvatarNarration(
+    "I am the Conversationally-Driven UI (CDUI) avatar. I translate your natural language into changes in this portfolio’s interface. " +
+      "Instead of browsing static pages, you can just tell me what you want to see, and I’ll reshape the view for you."
+  );
+  setSystemPrompt(
+    "You are talking to the CDUI avatar. Ask for portfolio-related views like Java projects, backend work, CV, or refinements of what you see."
+  );
+  setAvatarMood("curious");
+  setAvatarAnimation("presenting");
+  setChatInput("");
+  return;
+}
+
+// --- Hard off-topic rejection, e.g. recipes ---
+if (
+  lower.includes("recipe") ||
+  lower.includes("cook") ||
+  lower.includes("bake") ||
+  lower.includes("pie")
+) {
+  setAvatarNarration(
+    "This interface is designed to manage and display portfolio-related information. " +
+      "It cannot provide cooking recipes like cherry pie. " +
+      "If you’d like, I can instead show you how Admir approaches secure systems, testing, or other tech topics."
+  );
+  setSystemPrompt(
+    "Recipe request unsupported. Please ask for views or refinements related to this portfolio."
+  );
+  setAvatarMood("skeptical");
+  setAvatarAnimation("thinking");
+  setChatInput("");
+  return;
+}
+
+
     const intent: Intent = parseIntent(trimmed);
     const current = history[history.length - 1];
 
@@ -209,53 +253,59 @@ function App() {
     void handleCommand(chatInput);
   };
 
-  return (
-    <div className="app-shell">
-      <div className="ui-region">
-        {/* Avatar always visible at the top of the UI region */}
+ return (
+  <div className="app-shell">
+    <div className="app-main">
+      {/* Left column: avatar, pinned */}
+      <aside className="avatar-column">
         <AvatarPanel
           narration={avatarNarration}
           mood={avatarMood}
           animation={avatarAnimation}
         />
+      </aside>
 
+      {/* Right column: the CDUI screen */}
+      <main className="content-column">
         <div className="ui-fullscreen">
           <ScreenRenderer screen={currentScreen} onAction={handleAction} />
         </div>
-      </div>
-
-      {isChatOpen && (
-        <div className="chat-dock">
-          <div className="chat-box">
-            <p className="chat-label">Interface</p>
-            <p className="chat-system">{systemPrompt}</p>
-
-            <form onSubmit={handleChatSubmit} className="chat-form">
-              <input
-                className="chat-input"
-                placeholder="Describe how you want the interface to change..."
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                autoFocus
-              />
-              <div className="chat-buttons">
-                <button type="submit">Commit change</button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setChatInput("");
-                    setIsChatOpen(false);
-                  }}
-                >
-                  Close chat
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      </main>
     </div>
-  );
+
+    {isChatOpen && (
+      <div className="chat-dock">
+        <div className="chat-box">
+          <p className="chat-label">INTERFACE</p>
+          <p className="chat-system">{systemPrompt}</p>
+
+          <form onSubmit={handleChatSubmit} className="chat-form">
+            <input
+              className="chat-input"
+              placeholder="Describe how you want the interface to change..."
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              autoFocus
+            />
+            <div className="chat-buttons">
+              <button type="submit">Commit change</button>
+              <button
+                type="button"
+                onClick={() => {
+                  setChatInput("");
+                  setIsChatOpen(false);
+                }}
+              >
+                Close chat
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
+  </div>
+);
+
 }
 
 export default App;
