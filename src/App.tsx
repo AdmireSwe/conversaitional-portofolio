@@ -3,11 +3,13 @@ import React, { useState } from "react";
 import "./App.css";
 
 import { ScreenRenderer } from "./cdui/components/ScreenRenderer";
+import { AvatarPanel } from "./cdui/components/AvatarPanel";
+
 import type { ScreenDescription, ScreenMutation } from "./cdui/types";
 import { parseIntent, type Intent } from "./cdui/intent";
 import { homeScreen } from "./cdui/screens";
 import { decideFromText } from "./cdui/ai";
-import { callBrain } from "./cdui/brainClient";
+import { callBrain, type AvatarMood, type AvatarAnimation } from "./cdui/brainClient";
 import { applyMutation } from "./cdui/mutate";
 
 const IS_PROD = import.meta.env.PROD;
@@ -23,13 +25,20 @@ function App() {
 
   const [isChatOpen, setIsChatOpen] = useState(false);
 
+  // Avatar state: what it "says" and how it "feels"
+  const [avatarNarration, setAvatarNarration] = useState<string>(
+    "Hi, I’m the CDUI avatar. Tell me what you want to see, and I’ll reshape this portfolio interface."
+  );
+  const [avatarMood, setAvatarMood] = useState<AvatarMood>("neutral");
+  const [avatarAnimation, setAvatarAnimation] =
+    useState<AvatarAnimation>("idle");
+
   /**
    * Handle button clicks from the CDUI screen.
    */
   const handleAction = (actionId: string) => {
     if (actionId === "talk_to_interface") {
       setIsChatOpen(true);
-      // optional: scroll to bottom where the chat dock lives
       window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
       return;
     }
@@ -44,11 +53,6 @@ function App() {
 
   /**
    * Decide what to do with a text command.
-   *
-   * - Navigation intents (SHOW_*) and GO_BACK are handled LOCALLY in all envs.
-   * - In DEV: all other commands go through the local rule-based engine.
-   * - In PROD: other commands call the OpenAI brain for mutations,
-   *   with a fallback to the local rule-based engine on error.
    */
   const handleCommand = async (text: string) => {
     const trimmed = text.trim();
@@ -57,7 +61,7 @@ function App() {
     const intent: Intent = parseIntent(trimmed);
     const current = history[history.length - 1];
 
-    // --- GO_BACK: manipulate history directly, always local -----------------
+    // --- GO_BACK: manipulate history directly
     if (intent.type === "GO_BACK") {
       setHistory((prev) => {
         if (prev.length <= 1) return prev;
@@ -66,11 +70,14 @@ function App() {
         return copy;
       });
       setSystemPrompt("Went back to the previous view.");
+      setAvatarNarration("I restored the previous screen for you.");
+      setAvatarMood("neutral");
+      setAvatarAnimation("presenting");
       setChatInput("");
       return;
     }
 
-    // --- Navigation intents: ALWAYS handled via local decideFromText --------
+    // --- Navigation intents: handled via local decideFromText
     if (
       intent.type === "SHOW_CV" ||
       intent.type === "SHOW_PROJECTS" ||
@@ -80,33 +87,49 @@ function App() {
 
       if (result.kind === "push") {
         setHistory((prev) => [...prev, result.screen]);
-        if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
+        if (result.systemPrompt) {
+          setSystemPrompt(result.systemPrompt);
+          setAvatarNarration(result.systemPrompt);
+          setAvatarMood("curious");
+          setAvatarAnimation("presenting");
+        }
         setChatInput("");
         return;
       }
 
       if (result.kind === "noop") {
         setSystemPrompt(result.systemPrompt);
+        setAvatarNarration(result.systemPrompt);
+        setAvatarMood("neutral");
+        setAvatarAnimation("thinking");
         setChatInput("");
         return;
       }
     }
 
-    // From here on, we treat it as a "refinement" command (no navigation).
+    // From here: refinement commands (no explicit navigation)
 
-    // --- DEV / fallback path: local rule-based AI ---------------------------
+    // --- DEV / fallback path: local rule-based AI
     if (!IS_PROD) {
       const result = decideFromText(trimmed, history);
 
       if (result.kind === "push") {
         setHistory((prev) => [...prev, result.screen]);
-        if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
+        if (result.systemPrompt) {
+          setSystemPrompt(result.systemPrompt);
+          setAvatarNarration(result.systemPrompt);
+          setAvatarMood("curious");
+          setAvatarAnimation("presenting");
+        }
         setChatInput("");
         return;
       }
 
       if (result.kind === "noop") {
         setSystemPrompt(result.systemPrompt);
+        setAvatarNarration(result.systemPrompt);
+        setAvatarMood("neutral");
+        setAvatarAnimation("thinking");
         setChatInput("");
         return;
       }
@@ -114,24 +137,30 @@ function App() {
       return;
     }
 
-    // --- PROD path: call the OpenAI brain for mutations ---------------------
-
+    // --- PROD path: call the OpenAI brain for mutations + avatar info
     const brain = await callBrain(trimmed, current, history);
 
-    // If brain failed or returned nothing useful, fall back to local rules
     if (!brain) {
       console.warn("Brain returned null, falling back to local AI.");
       const result = decideFromText(trimmed, history);
 
       if (result.kind === "push") {
         setHistory((prev) => [...prev, result.screen]);
-        if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
+        if (result.systemPrompt) {
+          setSystemPrompt(result.systemPrompt);
+          setAvatarNarration(result.systemPrompt);
+          setAvatarMood("curious");
+          setAvatarAnimation("presenting");
+        }
         setChatInput("");
         return;
       }
 
       if (result.kind === "noop") {
         setSystemPrompt(result.systemPrompt);
+        setAvatarNarration(result.systemPrompt);
+        setAvatarMood("neutral");
+        setAvatarAnimation("thinking");
         setChatInput("");
         return;
       }
@@ -154,6 +183,24 @@ function App() {
       setSystemPrompt(brain.systemPrompt);
     }
 
+    if (brain.avatarNarration) {
+      setAvatarNarration(brain.avatarNarration);
+    } else if (brain.systemPrompt) {
+      setAvatarNarration(brain.systemPrompt);
+    }
+
+    if (brain.avatarState) {
+      if (brain.avatarState.mood) {
+        setAvatarMood(brain.avatarState.mood);
+      }
+      if (brain.avatarState.animation) {
+        setAvatarAnimation(brain.avatarState.animation);
+      }
+    } else {
+      setAvatarMood("neutral");
+      setAvatarAnimation("idle");
+    }
+
     setChatInput("");
   };
 
@@ -165,6 +212,13 @@ function App() {
   return (
     <div className="app-shell">
       <div className="ui-region">
+        {/* Avatar always visible at the top of the UI region */}
+        <AvatarPanel
+          narration={avatarNarration}
+          mood={avatarMood}
+          animation={avatarAnimation}
+        />
+
         <div className="ui-fullscreen">
           <ScreenRenderer screen={currentScreen} onAction={handleAction} />
         </div>

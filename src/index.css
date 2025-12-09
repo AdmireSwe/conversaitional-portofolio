@@ -66,3 +66,45 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* Avatar panel at the top of the UI region */
+.avatar-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  border-radius: 12px;
+  background: #eff4ff;
+  border: 1px solid #dbe3ff;
+  max-width: 800px;
+}
+
+.avatar-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.avatar-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.avatar-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #1d4ed8;
+}
+
+.avatar-status {
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.avatar-narration {
+  font-size: 0.9rem;
+  color: #111827;
+}

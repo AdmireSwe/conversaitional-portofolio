@@ -1,60 +1,47 @@
 // src/cdui/brainClient.ts
+import type { ScreenDescription, ScreenMutation } from "./types";
 
-import type {
-    ScreenDescription,
-    ScreenMutation,
-  } from "./types";
-  
-  export interface BrainResponse {
-    mutations: ScreenMutation[];
-    systemPrompt: string;
-  }
-  
-  const IS_PROD = import.meta.env.PROD;
-  
-  /**
-   * Calls the Vercel /api/brain endpoint.
-   *
-   * In DEV (npm run dev), this returns null so the app
-   * falls back to the local rule-based engine.
-   */
-  export async function callBrain(
-    text: string,
-    currentScreen: ScreenDescription,
-    history: ScreenDescription[]
-  ): Promise<BrainResponse | null> {
-    if (!IS_PROD) {
-      // In local dev we don't hit the OpenAI backend.
+export type AvatarMood = "neutral" | "curious" | "excited" | "skeptical";
+export type AvatarAnimation =
+  | "idle"
+  | "thinking"
+  | "searching"
+  | "presenting"
+  | "celebrating";
+
+export interface BrainAvatarState {
+  mood: AvatarMood;
+  animation: AvatarAnimation;
+}
+
+export interface BrainResponse {
+  mutations: ScreenMutation[];
+  systemPrompt: string;
+  avatarNarration: string;
+  avatarState: BrainAvatarState;
+}
+
+export async function callBrain(
+  text: string,
+  currentScreen: ScreenDescription,
+  history: ScreenDescription[]
+): Promise<BrainResponse | null> {
+  try {
+    const res = await fetch("/api/brain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, currentScreen, history }),
+    });
+
+    if (!res.ok) {
+      console.error("Brain HTTP error", res.status);
       return null;
     }
-  
-    try {
-      const res = await fetch("/api/brain", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ text, currentScreen, history }),
-      });
-  
-      if (!res.ok) {
-        console.error("Brain HTTP error:", res.status, res.statusText);
-        return null;
-      }
-  
-      const json = await res.json();
-  
-      if (!Array.isArray(json.mutations)) {
-        json.mutations = [];
-      }
-      if (typeof json.systemPrompt !== "string") {
-        json.systemPrompt = "Interface updated by AI.";
-      }
-  
-      return json as BrainResponse;
-    } catch (err) {
-      console.error("Brain network error:", err);
-      return null;
-    }
+
+    const data = (await res.json()) as BrainResponse;
+    return data;
+  } catch (err) {
+    console.error("Brain fetch failed:", err);
+    return null;
   }
-  
+}
