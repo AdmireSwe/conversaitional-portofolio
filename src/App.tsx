@@ -73,7 +73,9 @@ function App() {
       const newHistory = [...history, nextScreen];
 
       setHistory(newHistory);
-      setSystemPrompt("Showing CV overview. You can ask for details or another view.");
+      setSystemPrompt(
+        "Showing CV overview. You can ask for details or another view."
+      );
       setChatInput("");
 
       setAvatarThinking(true);
@@ -90,7 +92,45 @@ function App() {
       return;
     }
 
-    // from here on: compiler + avatar
+    // SHOW_PROJECTS / SHOW_ANY_PROJECTS:
+    // always handled by the local rule engine, even in prod
+    if (intent.type === "SHOW_PROJECTS" || intent.type === "SHOW_ANY_PROJECTS") {
+      setAvatarThinking(true);
+
+      let nextScreen: ScreenDescription = current;
+      let newHistory = history;
+      let compilerSystemPrompt: string | undefined;
+
+      const result = decideFromText(trimmed, history);
+
+      if (result.kind === "push") {
+        nextScreen = result.screen;
+        newHistory = [...history, result.screen];
+        setHistory(newHistory);
+        compilerSystemPrompt = result.systemPrompt;
+        if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
+      } else {
+        compilerSystemPrompt = result.systemPrompt;
+        if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
+      }
+
+      setChatInput("");
+
+      try {
+        const avatar = await callAvatar(trimmed, nextScreen, newHistory, {
+          systemPrompt: compilerSystemPrompt,
+        });
+        if (avatar?.narration) {
+          setAvatarNarration(avatar.narration);
+        }
+      } finally {
+        setAvatarThinking(false);
+      }
+
+      return;
+    }
+
+    // from here on: compiler + avatar (mutations on current screen)
     setAvatarThinking(true);
 
     let compilerSystemPrompt: string | undefined;
@@ -176,7 +216,11 @@ function App() {
       <div className="avatar-column">
         <div className="avatar-panel">
           <div className="avatar-header">
-            <span className="avatar-icon" role="img" aria-label="Interface avatar">
+            <span
+              className="avatar-icon"
+              role="img"
+              aria-label="Interface avatar"
+            >
               🤖
             </span>
             <div>
