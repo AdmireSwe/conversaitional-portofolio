@@ -97,7 +97,8 @@ export type ScreenMutation =
   | { kind: "CHANGE_LEVEL"; area: string; level: string }
   | { kind: "ADD_TIMELINE_ENTRY"; entry: TimelineEntry }
   | { kind: "FILTER_PROJECTS"; tech: string }
-  | { kind: "ADD_INFO"; title: string; body: string }; // 👈 NEW
+  | { kind: "ADD_INFO"; title: string; body: string }
+  | { kind: "ADD_INFO"; title: string; body: string };
 
 // Helper to convert Project[] into a ProjectListWidget
 export function projectListFromProjects(

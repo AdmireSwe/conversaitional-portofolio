@@ -48,7 +48,7 @@ Valid mutations:
 {
   "kind": "ADD_INFO",
   "title": "<short summary>",
-  "body": "<one or two sentences explaining what you changed in the interface>"
+  "body": "<1-3 sentence explanation in plain language>"
 }
 
 You MUST NOT invent any new mutation kinds.
