@@ -1,5 +1,5 @@
-/* Make the app fill the viewport */
-/* Make the whole document truly full-screen. */
+/* ===== Global layout ===== */
+
 html,
 body {
   margin: 0;
@@ -11,29 +11,29 @@ body {
   height: 100%;
 }
 
-/* ==== APP LAYOUT: UI on top, chat dock at bottom ==== */
-
 .app-shell {
+  min-height: 100vh;
+  background: #f9fafb;
+  color: #0f172a;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
   display: flex;
   flex-direction: column;
-  height: 100vh;
 }
 
-/* Region where the CDUI screens live */
+/* Main UI region (top part with the portfolio content) */
 .ui-region {
   flex: 1;
-  min-height: 0;
-  background: #f9fafb;
-  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 2.5rem 1.5rem 7rem; /* room at bottom for docked chat */
 }
 
-/* CDUI UI region (fills ui-region) */
+/* Screen container with subtle fade-in */
 .ui-fullscreen {
   width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
+  max-width: 960px;
   animation: cduiFadeIn 0.35s ease-out;
 }
 
@@ -48,24 +48,49 @@ body {
   }
 }
 
-/* Chat dock at the bottom */
+/* ===== Docked chat panel ===== */
+
+/* Chat dock is fixed at the bottom, but only as a centered card */
 .chat-dock {
-  border-top: 1px solid #111827;
-  background: #050816;
-  color: #f5f5f5;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none; /* let only the box receive clicks */
 }
 
-/* Chat panel box */
+/* Hidden state (when chatVisible === false) */
+.chat-dock.hidden {
+  display: none;
+}
+
+/* The actual chat card */
 .chat-box {
-  max-width: 900px;
-  margin: 0 auto;
-  width: 100%;
+  pointer-events: auto;
+  max-width: 720px;
+  width: calc(100% - 2rem);
+  margin-bottom: 1.25rem;
+
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+  border: 1px solid #e2e8f0;
+
   padding: 1.25rem 1.5rem;
-  border-radius: 0.75rem 0.75rem 0 0;
-  background: #111827;
-  box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.6);
+  animation: chatSlideUp 0.3s ease-out;
+}
+
+@keyframes chatSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .chat-label {
@@ -73,58 +98,75 @@ body {
   font-size: 0.75rem;
   letter-spacing: 0.1em;
   color: #9ca3af;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.1rem;
 }
 
 .chat-system {
   font-size: 0.9rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.9rem;
+  color: #1e293b;
 }
 
 .chat-form {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.6rem;
 }
 
 .chat-input {
-  padding: 0.75rem 1rem;
-  border-radius: 0.75rem;
-  border: 1px solid #4b5563;
-  background: #020617;
-  color: #f9fafb;
+  padding: 0.7rem 1rem;
+  border-radius: 999px;
+  border: 1px solid #cbd5f5;
+  background: #f9fafb;
+  color: #0f172a;
+  font-size: 0.9rem;
+}
+
+.chat-input::placeholder {
+  color: #94a3b8;
 }
 
 .chat-input:focus {
   outline: none;
-  border-color: #60a5fa;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35);
 }
 
 .chat-buttons {
   display: flex;
-  gap: 0.5rem;
   justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 .chat-buttons button {
-  padding: 0.5rem 0.9rem;
+  padding: 0.45rem 0.95rem;
   border-radius: 999px;
   border: none;
   cursor: pointer;
+  font-size: 0.85rem;
 }
 
+/* Primary commit button */
 .chat-buttons button[type="submit"] {
   background: #2563eb;
-  color: white;
+  color: #ffffff;
 }
 
-/* ==== CONTENT STYLES ==== */
+/* Secondary "Close chat" button */
+.chat-buttons button[type="button"] {
+  background: #e2e8f0;
+  color: #0f172a;
+}
 
-/* Remove bullets for project list */
+/* ===== Generic list reset ===== */
+
 ul {
   list-style-type: none;
   padding-left: 0;
+  margin: 0;
 }
+
+/* ===== Info card ===== */
 
 .info-card {
   border-radius: 12px;
@@ -133,6 +175,7 @@ ul {
   background: #f5f7fb;
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
   max-width: 720px;
+  animation: cduiFadeIn 0.3s ease-out;
 }
 
 .info-card h2 {
@@ -146,6 +189,8 @@ ul {
   line-height: 1.5;
   color: #334155;
 }
+
+/* ===== Tags / chips ===== */
 
 .tag-list {
   margin-top: 1.25rem;
@@ -163,6 +208,18 @@ ul {
   gap: 0.5rem;
 }
 
+/* Subtle pop-in animation for new tags */
+@keyframes chipPop {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
 .tag-chip {
   border-radius: 999px;
   padding: 0.3rem 0.8rem;
@@ -170,7 +227,20 @@ ul {
   background: #e2e8f0;
   color: #0f172a;
   white-space: nowrap;
+  animation: chipPop 0.25s ease-out;
 }
+
+/* Reuse the same animation for skill chips */
+.skill-chip {
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  background: #e2e8f0;
+  color: #0f172a;
+  animation: chipPop 0.25s ease-out;
+}
+
+/* ===== Timeline ===== */
 
 .timeline {
   margin-top: 1.5rem;
@@ -195,6 +265,7 @@ ul {
   position: relative;
   margin: 0 0 1rem;
   padding-left: 1.5rem;
+  animation: cduiFadeIn 0.25s ease-out;
 }
 
 .timeline-dot {
@@ -240,6 +311,8 @@ ul {
   color: #475569;
 }
 
+/* ===== Skill matrix ===== */
+
 .skill-matrix {
   margin-top: 1.5rem;
   max-width: 720px;
@@ -267,6 +340,7 @@ ul {
   border-radius: 10px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
+  animation: cduiFadeIn 0.25s ease-out;
 }
 
 .skill-matrix-area {
@@ -281,31 +355,8 @@ ul {
   gap: 0.3rem;
 }
 
-.skill-chip {
-  border-radius: 999px;
-  padding: 0.2rem 0.6rem;
-  font-size: 0.8rem;
-  background: #e2e8f0;
-  color: #0f172a;
-}
-
 .skill-matrix-level {
   font-size: 0.8rem;
   text-align: right;
   color: #64748b;
-}
-
-.fade-in {
-  animation: fadeDock 0.35s ease-out;
-}
-
-@keyframes fadeDock {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
