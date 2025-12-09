@@ -10,12 +10,9 @@ import { decideFromText } from "./cdui/ai";
 import { callBrain } from "./cdui/brainClient";
 import { applyMutation } from "./cdui/mutate";
 
-type Mode = "ui" | "chat";
-
 const IS_PROD = import.meta.env.PROD;
 
 function App() {
-  const [mode, setMode] = useState<Mode>("ui");
   const [history, setHistory] = useState<ScreenDescription[]>([homeScreen]);
   const currentScreen = history[history.length - 1];
 
@@ -27,11 +24,12 @@ function App() {
   /**
    * Handle button clicks from the CDUI screen.
    * For now there's only one special button: "talk_to_interface".
+   * Since chat is always visible now, this could later focus the input field.
    */
   const handleAction = (actionId: string) => {
     if (actionId === "talk_to_interface") {
-      // Switch into full-screen chat mode
-      setMode("chat");
+      // Chat is always visible now; for now we just log.
+      console.log("Talk to interface clicked – chat is below.");
       return;
     }
 
@@ -67,10 +65,11 @@ function App() {
         return copy;
       });
       setSystemPrompt("Went back to the previous view.");
-      setMode("ui");
       setChatInput("");
       return;
     }
+
+    const current = history[history.length - 1];
 
     // --- DEV / fallback path: local rule-based AI ---
     if (!IS_PROD) {
@@ -79,14 +78,13 @@ function App() {
       if (result.kind === "push") {
         setHistory((prev) => [...prev, result.screen]);
         if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
-        setMode("ui");
         setChatInput("");
         return;
       }
 
       if (result.kind === "noop") {
         setSystemPrompt(result.systemPrompt);
-        // stay in chat mode so user can refine
+        // user can refine in the chat dock
         return;
       }
 
@@ -95,7 +93,6 @@ function App() {
 
     // --- PROD path: call the OpenAI brain via /api/brain ---
 
-    const current = history[history.length - 1];
     const brain = await callBrain(trimmed, current, history);
 
     // If brain failed or returned nothing useful, fall back to local rules
@@ -106,7 +103,6 @@ function App() {
       if (result.kind === "push") {
         setHistory((prev) => [...prev, result.screen]);
         if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
-        setMode("ui");
         setChatInput("");
         return;
       }
@@ -136,7 +132,6 @@ function App() {
       setSystemPrompt(brain.systemPrompt);
     }
 
-    setMode("ui");
     setChatInput("");
   };
 
@@ -145,10 +140,15 @@ function App() {
     void handleCommand(chatInput);
   };
 
-  // MODE: CHAT (full-screen)
-  if (mode === "chat") {
-    return (
-      <div className="chat-fullscreen">
+  return (
+    <div className="app-shell">
+      <div className="ui-region">
+        <div className="ui-fullscreen">
+          <ScreenRenderer screen={currentScreen} onAction={handleAction} />
+        </div>
+      </div>
+
+      <div className="chat-dock">
         <div className="chat-box">
           <p className="chat-label">Interface</p>
           <p className="chat-system">{systemPrompt}</p>
@@ -159,30 +159,13 @@ function App() {
               placeholder="Type what you want the interface to become..."
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              autoFocus
             />
             <div className="chat-buttons">
               <button type="submit">Commit change</button>
-              <button
-                type="button"
-                onClick={() => {
-                  setChatInput("");
-                  setMode("ui");
-                }}
-              >
-                Cancel
-              </button>
             </div>
           </form>
         </div>
       </div>
-    );
-  }
-
-  // MODE: UI (full-screen CDUI screen)
-  return (
-    <div className="ui-fullscreen">
-      <ScreenRenderer screen={currentScreen} onAction={handleAction} />
     </div>
   );
 }

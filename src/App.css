@@ -11,14 +11,29 @@ body {
   height: 100%;
 }
 
-/* Fullscreen CDUI UI mode */
-.ui-fullscreen {
-  min-height: 100vh;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* ==== APP LAYOUT: UI on top, chat dock at bottom ==== */
 
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Region where the CDUI screens live */
+.ui-region {
+  flex: 1;
+  min-height: 0;
+  background: #f9fafb;
+  overflow: hidden;
+}
+
+/* CDUI UI region (fills ui-region) */
+.ui-fullscreen {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
   animation: cduiFadeIn 0.35s ease-out;
 }
 
@@ -33,30 +48,24 @@ body {
   }
 }
 
-.chat-fullscreen {
-  position: fixed; /* <-- critical */
-  top: 0;
-  left: 0;
-  width: 100vw; /* <-- full viewport width */
-  height: 100vh; /* <-- full viewport height */
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
+/* Chat dock at the bottom */
+.chat-dock {
+  border-top: 1px solid #111827;
   background: #050816;
   color: #f5f5f5;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
 }
 
+/* Chat panel box */
 .chat-box {
-  max-width: 700px;
+  max-width: 900px;
+  margin: 0 auto;
   width: 100%;
-  padding: 2rem;
-  border-radius: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 0.75rem 0.75rem 0 0;
   background: #111827;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.6);
 }
 
 .chat-label {
@@ -68,8 +77,8 @@ body {
 }
 
 .chat-system {
-  font-size: 1rem;
-  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
 }
 
 .chat-form {
@@ -109,10 +118,7 @@ body {
   color: white;
 }
 
-.chat-buttons button[type="button"] {
-  background: #374151;
-  color: #e5e7eb;
-}
+/* ==== CONTENT STYLES ==== */
 
 /* Remove bullets for project list */
 ul {
