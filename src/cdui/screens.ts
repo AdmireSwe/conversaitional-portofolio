@@ -133,6 +133,7 @@ export const cvScreen: ScreenDescription = {
       type: "timeline",
       title: "Education & training timeline",
       entries: [
+        // --- REAL ENTRIES ---
         {
           id: "wbs-ausbildung",
           title: "Umschulung – Fachinformatiker Anwendungsentwicklung",
@@ -155,6 +156,55 @@ export const cvScreen: ScreenDescription = {
           period: "Before 2024",
           description:
             "Background outside of IT that shapes soft skills, resilience and problem-solving – details will be in the full CV.",
+        },
+
+        // --- DUMMY ENTRIES FOR SCROLL TESTING ---
+        {
+          id: "dummy-1",
+          title: "Lorem Ipsum Foundation Studies",
+          subtitle: "Dolor Sit Amet Institute",
+          period: "2020 – 2021",
+          description:
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus pharetra, velit vitae porttitor fermentum.",
+        },
+        {
+          id: "dummy-2",
+          title: "Advanced Lorem Certification",
+          subtitle: "Ipsum University",
+          period: "2019 – 2020",
+          description:
+            "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium.",
+        },
+        {
+          id: "dummy-3",
+          title: "Dolor Sit Amet Bootcamp",
+          subtitle: "Amet Academy",
+          period: "2018 – 2019",
+          description:
+            "Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.",
+        },
+        {
+          id: "dummy-4",
+          title: "Placeholder Studies in Sit Amet Lorem",
+          period: "2017 – 2018",
+          description:
+            "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam.",
+        },
+        {
+          id: "dummy-5",
+          title: "Very Important Ipsum Research",
+          subtitle: "Lorem Research Center",
+          period: "2016 – 2017",
+          description:
+            "Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur.",
+        },
+        {
+          id: "dummy-6",
+          title: "Super Secret Ipsum Work",
+          subtitle: "Restricted Archives",
+          period: "2015 – 2016",
+          description:
+            "At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium.",
         },
       ],
     },
