@@ -5,13 +5,12 @@ export type Intent =
   | { type: "SHOW_CV" }
   | { type: "SHOW_ANY_PROJECTS" }
   | { type: "GO_BACK" }
+  | { type: "LOOP_TIMELINE" }
   | { type: "UNKNOWN"; reason?: string };
-  
 
-  function hasAny(text: string, candidates: string[]): boolean {
-    return candidates.some((word) => text.includes(word));
-  }
-  
+function hasAny(text: string, candidates: string[]): boolean {
+  return candidates.some((word) => text.includes(word));
+}
 
 /**
  * Turn raw user text into a structured intent object.
@@ -27,7 +26,24 @@ export function parseIntent(input: string): Intent {
     return { type: "SHOW_CV" };
   }
 
-  // --- Go back intent (much more tolerant now) ---
+  // --- Loop-through intent (timeline slideshow) ---
+  if (
+    hasAny(text, [
+      "loop through",
+      "go through all",
+      "go through them all",
+      "show and explain all one by one",
+      "step through",
+      "step through them",
+      "walk me through",
+      "walk through the timeline",
+      "loop the timeline",
+    ])
+  ) {
+    return { type: "LOOP_TIMELINE" };
+  }
+
+  // --- Go back intent (tolerant) ---
   if (
     text === "back" ||
     text === "go back" ||
@@ -59,20 +75,20 @@ export function parseIntent(input: string): Intent {
   }
 
   // --- Show something else / next thing ---
-if (
-  hasAny(text, [
-    "something else",
-    "anything else",
-    "more projects",
-    "more work",
-    "show more",
-    "next",
-    "next project",
-    "next portfolio item"
-  ])
-) {
-  return { type: "SHOW_ANY_PROJECTS" };
-}
+  if (
+    hasAny(text, [
+      "something else",
+      "anything else",
+      "more projects",
+      "more work",
+      "show more",
+      "next",
+      "next project",
+      "next portfolio item",
+    ])
+  ) {
+    return { type: "SHOW_ANY_PROJECTS" };
+  }
 
   // Fallback
   return { type: "UNKNOWN", reason: "no match" };

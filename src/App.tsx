@@ -1,9 +1,13 @@
 // src/App.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./App.css";
 
 import { ScreenRenderer } from "./cdui/components/ScreenRenderer";
-import type { ScreenDescription, ScreenMutation } from "./cdui/types";
+import type {
+  ScreenDescription,
+  ScreenMutation,
+  TimelineWidget,
+} from "./cdui/types";
 import { parseIntent, type Intent } from "./cdui/intent";
 import { homeScreen, cvScreen } from "./cdui/screens";
 import { decideFromText } from "./cdui/ai";
@@ -12,6 +16,14 @@ import { callAvatar } from "./cdui/avatarClient";
 import { applyMutation } from "./cdui/mutate";
 
 const IS_PROD = import.meta.env.PROD;
+
+type LoopMode =
+  | {
+      kind: "timeline";
+      ids: string[];
+      index: number;
+    }
+  | null;
 
 function App() {
   const [history, setHistory] = useState<ScreenDescription[]>([homeScreen]);
@@ -29,6 +41,46 @@ function App() {
   // Which UI element/section is currently in focus (for highlighting/scrolling)
   const [focusTarget, setFocusTarget] = useState<string | null>(null);
 
+  // Loop mode for automatic walkthroughs (e.g. timeline slideshow)
+  const [loopMode, setLoopMode] = useState<LoopMode>(null);
+
+  // Drive the loop: when loopMode is active, step through ids one by one.
+  useEffect(() => {
+    if (!loopMode || loopMode.kind !== "timeline") return;
+
+    const { ids, index } = loopMode;
+    if (!ids.length) {
+      setLoopMode(null);
+      return;
+    }
+
+    if (index >= ids.length) {
+      // Finished the loop
+      setLoopMode(null);
+      return;
+    }
+
+    // Focus the current entry
+    const currentId = ids[index];
+    setFocusTarget(currentId);
+
+    // Schedule next step
+    const handle = window.setTimeout(() => {
+      setLoopMode((prev) => {
+        if (!prev || prev.kind !== "timeline") return prev;
+        if (prev.index >= prev.ids.length - 1) {
+          // after last, end loop
+          return null;
+        }
+        return { ...prev, index: prev.index + 1 };
+      });
+    }, 3500); // 3.5s per entry
+
+    return () => {
+      window.clearTimeout(handle);
+    };
+  }, [loopMode]);
+
   // --- button clicks from the CDUI screen (right column) ---
   const handleAction = (actionId: string) => {
     if (actionId === "download_cv") {
@@ -44,6 +96,9 @@ function App() {
     const trimmed = text.trim();
     if (!trimmed) return;
 
+    // Any new command cancels an active loop
+    setLoopMode(null);
+
     const intent: Intent = parseIntent(trimmed);
     const current = currentScreen;
 
@@ -55,7 +110,7 @@ function App() {
       setHistory(prevHistory);
       setSystemPrompt("Went back to the previous view.");
       setChatInput("");
-      setFocusTarget(null); // clear focus when navigating back
+      setFocusTarget(null);
 
       setAvatarThinking(true);
       try {
@@ -67,8 +122,6 @@ function App() {
         }
         if (avatar?.focusTarget) {
           setFocusTarget(avatar.focusTarget);
-        } else {
-          setFocusTarget(null);
         }
       } finally {
         setAvatarThinking(false);
@@ -86,7 +139,7 @@ function App() {
         "Showing CV overview. You can ask for details or another view."
       );
       setChatInput("");
-      setFocusTarget(null); // clear focus when switching to CV
+      setFocusTarget(null);
 
       setAvatarThinking(true);
       try {
@@ -98,8 +151,6 @@ function App() {
         }
         if (avatar?.focusTarget) {
           setFocusTarget(avatar.focusTarget);
-        } else {
-          setFocusTarget(null);
         }
       } finally {
         setAvatarThinking(false);
@@ -130,7 +181,7 @@ function App() {
       }
 
       setChatInput("");
-      setFocusTarget(null); // clear focus when switching views
+      setFocusTarget(null);
 
       try {
         const avatar = await callAvatar(trimmed, nextScreen, newHistory, {
@@ -141,9 +192,64 @@ function App() {
         }
         if (avatar?.focusTarget) {
           setFocusTarget(avatar.focusTarget);
-        } else {
-          setFocusTarget(null);
         }
+      } finally {
+        setAvatarThinking(false);
+      }
+
+      return;
+    }
+
+    // LOOP_TIMELINE: automatic walkthrough of current timeline (no brain)
+    if (intent.type === "LOOP_TIMELINE") {
+      const timelineWidget = current.widgets.find(
+        (w) => w.type === "timeline"
+      ) as TimelineWidget | undefined;
+
+      if (!timelineWidget || !timelineWidget.entries.length) {
+        setSystemPrompt("There is no timeline on this view to loop through.");
+        setChatInput("");
+        setFocusTarget(null);
+
+        setAvatarThinking(true);
+        try {
+          const avatar = await callAvatar(trimmed, current, history, {
+            systemPrompt:
+              "User requested a loop-through, but there is no timeline on this screen.",
+          });
+          if (avatar?.narration) {
+            setAvatarNarration(avatar.narration);
+          }
+        } finally {
+          setAvatarThinking(false);
+        }
+        return;
+      }
+
+      const ids = timelineWidget.entries.map((e) => e.id);
+      setLoopMode({
+        kind: "timeline",
+        ids,
+        index: 0,
+      });
+      setChatInput("");
+
+      setAvatarThinking(true);
+      try {
+        const avatar = await callAvatar(
+          "Loop through the timeline entries one by one and describe what this walkthrough is doing.",
+          current,
+          history,
+          {
+            systemPrompt:
+              "User requested an automatic loop through the timeline. Explain that the interface will highlight each entry one by one.",
+          }
+        );
+        if (avatar?.narration) {
+          setAvatarNarration(avatar.narration);
+        }
+        // We intentionally ignore avatar.focusTarget here,
+        // because the loop is controlling focusTarget.
       } finally {
         setAvatarThinking(false);
       }
@@ -223,8 +329,6 @@ function App() {
       }
       if (avatar?.focusTarget) {
         setFocusTarget(avatar.focusTarget);
-      } else {
-        setFocusTarget(null);
       }
     } finally {
       setAvatarThinking(false);
@@ -316,6 +420,7 @@ function App() {
                 onClick={() => {
                   setShowChat(false);
                   setChatInput("");
+                  setLoopMode(null);
                 }}
               >
                 Close chat
