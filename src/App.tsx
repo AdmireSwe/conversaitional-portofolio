@@ -44,7 +44,8 @@ function App() {
   // Loop mode for automatic walkthroughs (e.g. timeline slideshow)
   const [loopMode, setLoopMode] = useState<LoopMode>(null);
 
-  // Drive the loop: when loopMode is active, step through ids one by one.
+  // Drive the loop: when loopMode is active, step through ids one by one
+  // and have the avatar explain the current entry.
   useEffect(() => {
     if (!loopMode || loopMode.kind !== "timeline") return;
 
@@ -60,26 +61,56 @@ function App() {
       return;
     }
 
-    // Focus the current entry
     const currentId = ids[index];
     setFocusTarget(currentId);
 
-    // Schedule next step
+    let cancelled = false;
+
+    // Let the avatar explain the currently focused timeline entry
+    (async () => {
+      // Find the timeline and this specific entry for a better prompt
+      const timelineWidget = currentScreen.widgets.find(
+        (w) => w.type === "timeline"
+      ) as TimelineWidget | undefined;
+
+      const entry = timelineWidget?.entries.find((e) => e.id === currentId);
+
+      const userMessage = entry
+        ? `Explain the CV timeline entry titled "${entry.title}" (${entry.period}) in 2–3 sentences for the visitor.`
+        : `Explain the CV timeline entry with id "${currentId}" in 2–3 sentences for the visitor.`;
+
+      setAvatarThinking(true);
+      try {
+        const avatar = await callAvatar(userMessage, currentScreen, history, {
+          systemPrompt:
+            "The UI is automatically looping through timeline entries; describe the currently highlighted one in 2–3 sentences.",
+        });
+
+        if (!cancelled && avatar?.narration) {
+          setAvatarNarration(avatar.narration);
+        }
+      } finally {
+        // Always stop the spinner for this step, even if cancelled
+        setAvatarThinking(false);
+      }
+    })();
+
+    // Go to the next entry after a delay
     const handle = window.setTimeout(() => {
       setLoopMode((prev) => {
         if (!prev || prev.kind !== "timeline") return prev;
         if (prev.index >= prev.ids.length - 1) {
-          // after last, end loop
-          return null;
+          return null; // finished
         }
         return { ...prev, index: prev.index + 1 };
       });
-    }, 3500); // 3.5s per entry
+    }, 8000); // ~8s per entry so there’s time to read
 
     return () => {
+      cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [loopMode]);
+  }, [loopMode, currentScreen, history]);
 
   // --- button clicks from the CDUI screen (right column) ---
   const handleAction = (actionId: string) => {
@@ -234,22 +265,21 @@ function App() {
       });
       setChatInput("");
 
+      // Intro explanation: what the loop is doing (one-time)
       setAvatarThinking(true);
       try {
         const avatar = await callAvatar(
-          "Loop through the timeline entries one by one and describe what this walkthrough is doing.",
+          "The user asked to go through the CV timeline entries one by one. Explain that the interface will highlight each entry in sequence and briefly describe them.",
           current,
           history,
           {
             systemPrompt:
-              "User requested an automatic loop through the timeline. Explain that the interface will highlight each entry one by one.",
+              "User requested an automatic loop through the timeline. Explain that each entry will be highlighted and described in turn.",
           }
         );
         if (avatar?.narration) {
           setAvatarNarration(avatar.narration);
         }
-        // We intentionally ignore avatar.focusTarget here,
-        // because the loop is controlling focusTarget.
       } finally {
         setAvatarThinking(false);
       }
