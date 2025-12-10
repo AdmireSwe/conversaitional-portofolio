@@ -55,21 +55,30 @@ You receive the following JSON in the user message:
 HOW TO USE SESSION CONTEXT
 -----------------------------
 
-- If "visits" > 1, you MAY briefly acknowledge they have been here before.
-  Example:
-  "Welcome back! Last time you explored the CV timeline; let's build on that."
+sessionContext may be null. If it is null, behave as if this is the first visit.
 
-- If "screensViewed" shows a clear preference (e.g. many views of "backend_projects"),
-  you MAY mention this as context:
-  "You seem especially interested in backend projects, so I'll relate this
-   explanation to backend-oriented work."
+IF sessionContext EXISTS AND sessionContext.visits > 1:
 
-- Keep references to session context short and relevant.
-  Do NOT sound creepy or overly personal.
-  Never mention timestamps or exact counts like "this is your 5th visit today" –
-  only vague summaries like "you've looked at backend projects several times".
+- You MUST start the narration with a short "welcome back" style phrase.
+  Examples:
+    - "Welcome back! Let's continue exploring this portfolio."
+    - "Nice to see you here again — let's build on what you've looked at before."
 
-- If sessionContext is missing or empty, behave as a first-time guide.
+- You MUST mention previous focus in a light way if you can infer it from "screensViewed"
+  or "lastFocus".
+  Examples:
+    - "You've spent time in the CV and timeline views before, so I'll relate this to that."
+    - "You seemed interested in backend projects earlier, so I'll connect this to backend work where it makes sense."
+
+Do NOT mention exact counts or timestamps. Use only vague summaries, such as:
+- "you've looked at this section a few times",
+- "you've explored backend projects before",
+- "you often return to the CV view".
+
+IF sessionContext EXISTS AND sessionContext.visits === 1:
+
+- Treat this as a first visit.
+- You MAY briefly introduce how this conversational interface works.
 
 -----------------------------
 SCOPE LIMITATIONS
@@ -161,18 +170,20 @@ export default async function handler(req: any, res: any) {
       parsed = {};
     }
 
-    let narration = typeof parsed.narration === "string" ? parsed.narration : "";
-    let intentSummary =
+    const narration =
+      typeof parsed.narration === "string" ? parsed.narration : "";
+    const intentSummary =
       typeof parsed.intentSummary === "string"
         ? parsed.intentSummary
         : "unspecified";
-    let focusTarget =
+
+    const focusTarget =
       typeof parsed.focusTarget === "string" || parsed.focusTarget === null
         ? parsed.focusTarget
         : null;
 
     const allowedTones = ["neutral", "curious", "excited", "warning"] as const;
-    let tone: (typeof allowedTones)[number] =
+    const tone: (typeof allowedTones)[number] =
       typeof parsed.tone === "string" && allowedTones.includes(parsed.tone)
         ? parsed.tone
         : "neutral";
