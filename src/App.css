@@ -480,3 +480,84 @@ ul {
     padding-top: 1rem;
   }
 }
+
+/* ===== Project list styling & transitions ===== */
+
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+
+  /* Fade-in whenever the project list is newly mounted (e.g. after filtering) */
+  animation: projectListFadeIn 0.3s ease-out;
+}
+
+@keyframes projectListFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.project-card {
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
+}
+
+.project-title {
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 0.4rem;
+}
+
+.project-tech {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+/* Reuse tag-chip styling but allow a bit of spacing specificity if needed */
+.project-tech-chip {
+  font-size: 0.78rem;
+}
+
+/* ===== Button row styling ===== */
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+}
+
+.button-row-button {
+  padding: 0.45rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #f9fafb;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #0f172a;
+  transition: background-color 0.12s ease-out, transform 0.12s ease-out,
+    box-shadow 0.12s ease-out;
+}
+
+.button-row-button:hover {
+  background: #e5edff;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.18);
+}
+
+.button-row-button:active {
+  transform: translateY(0);
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.16);
+}
