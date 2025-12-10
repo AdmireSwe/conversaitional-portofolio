@@ -416,6 +416,27 @@ ul {
   color: #475569;
 }
 
+/* ===== Focused timeline entry highlight ===== */
+
+.timeline-item-focused {
+  background: #eef2ff;
+  border-radius: 10px;
+  padding-top: 0.8rem;
+  padding-bottom: 0.8rem;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.35);
+  transition: box-shadow 0.2s ease-out, transform 0.2s ease-out;
+  transform: translateX(2px);
+}
+
+.timeline-item-focused .timeline-dot {
+  background: #4f46e5;
+}
+
+.timeline-item-focused .timeline-title-text {
+  color: #111827;
+}
+
+
 /* ===== Skill matrix ===== */
 
 .skill-matrix {

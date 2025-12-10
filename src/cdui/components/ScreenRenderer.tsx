@@ -1,6 +1,6 @@
 // src/cdui/components/ScreenRenderer.tsx
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import type {
   ScreenDescription,
   Widget,
@@ -16,6 +16,7 @@ import type {
 interface ScreenRendererProps {
   screen: ScreenDescription;
   onAction: (actionId: string) => void;
+  focusTarget?: string | null;
 }
 
 /**
@@ -25,10 +26,13 @@ interface ScreenRendererProps {
  * - Uses flex layout direction from screen.layout ("column" or "row").
  * - Adds a subtle fade-in transition for the project list whenever
  *   the number of projects changes (useful for FILTER_PROJECTS).
+ * - If focusTarget is provided, certain widgets (like timeline entries)
+ *   will visually highlight and scroll into view.
  */
 export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
   screen,
   onAction,
+  focusTarget,
 }) => {
   return (
     <div
@@ -46,6 +50,7 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
           widget={widget}
           screenId={screen.screenId}
           onAction={onAction}
+          focusTarget={focusTarget}
         />
       ))}
     </div>
@@ -56,12 +61,14 @@ interface WidgetRendererProps {
   widget: Widget;
   screenId: string;
   onAction: (actionId: string) => void;
+  focusTarget?: string | null;
 }
 
 const WidgetRenderer: React.FC<WidgetRendererProps> = ({
   widget,
   screenId,
   onAction,
+  focusTarget,
 }) => {
   switch (widget.type) {
     case "text":
@@ -86,7 +93,7 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({
       return <TagListBlock widget={widget} />;
 
     case "timeline":
-      return <TimelineBlock widget={widget} />;
+      return <TimelineBlock widget={widget} focusTarget={focusTarget} />;
 
     case "skill_matrix":
       return <SkillMatrixBlock widget={widget} />;
@@ -215,30 +222,60 @@ const TagListBlock: React.FC<{ widget: TagListWidget }> = ({ widget }) => {
   );
 };
 
-// ---------- TIMELINE ----------
+// ---------- TIMELINE (with focus + scroll) ----------
 
-const TimelineBlock: React.FC<{ widget: TimelineWidget }> = ({ widget }) => {
+const TimelineBlock: React.FC<{
+  widget: TimelineWidget;
+  focusTarget?: string | null;
+}> = ({ widget, focusTarget }) => {
+  const focusedRef = useRef<HTMLLIElement | null>(null);
+
+  useEffect(() => {
+    if (focusedRef.current && focusTarget) {
+      focusedRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }, [focusTarget]);
+
   return (
     <div className="timeline">
       <h3 className="timeline-title">{widget.title}</h3>
       <ul className="timeline-list">
-        {widget.entries.map((entry) => (
-          <li key={entry.id} className="timeline-item">
-            <div className="timeline-dot" />
-            <div className="timeline-content">
-              <div className="timeline-header">
-                <span className="timeline-period">{entry.period}</span>
-                <span className="timeline-title-text">{entry.title}</span>
-                {entry.subtitle && (
-                  <span className="timeline-subtitle">{entry.subtitle}</span>
+        {widget.entries.map((entry) => {
+          const isFocused =
+            !!focusTarget &&
+            (focusTarget === entry.id ||
+              focusTarget.toLowerCase().includes(entry.id.toLowerCase()));
+
+          return (
+            <li
+              key={entry.id}
+              className={
+                "timeline-item" +
+                (isFocused ? " timeline-item-focused" : "")
+              }
+              ref={isFocused ? focusedRef : null}
+            >
+              <div className="timeline-dot" />
+              <div className="timeline-content">
+                <div className="timeline-header">
+                  <span className="timeline-period">{entry.period}</span>
+                  <span className="timeline-title-text">{entry.title}</span>
+                  {entry.subtitle && (
+                    <span className="timeline-subtitle">
+                      {entry.subtitle}
+                    </span>
+                  )}
+                </div>
+                {entry.description && (
+                  <p className="timeline-description">{entry.description}</p>
                 )}
               </div>
-              {entry.description && (
-                <p className="timeline-description">{entry.description}</p>
-              )}
-            </div>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

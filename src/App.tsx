@@ -26,6 +26,9 @@ function App() {
   const [avatarThinking, setAvatarThinking] = useState(false);
   const [showChat, setShowChat] = useState(false);
 
+  // Which UI element/section is currently in focus (for highlighting/scrolling)
+  const [focusTarget, setFocusTarget] = useState<string | null>(null);
+
   // --- button clicks from the CDUI screen (right column) ---
   const handleAction = (actionId: string) => {
     if (actionId === "download_cv") {
@@ -52,6 +55,7 @@ function App() {
       setHistory(prevHistory);
       setSystemPrompt("Went back to the previous view.");
       setChatInput("");
+      setFocusTarget(null); // clear focus when navigating back
 
       setAvatarThinking(true);
       try {
@@ -60,6 +64,11 @@ function App() {
         });
         if (avatar?.narration) {
           setAvatarNarration(avatar.narration);
+        }
+        if (avatar?.focusTarget) {
+          setFocusTarget(avatar.focusTarget);
+        } else {
+          setFocusTarget(null);
         }
       } finally {
         setAvatarThinking(false);
@@ -77,6 +86,7 @@ function App() {
         "Showing CV overview. You can ask for details or another view."
       );
       setChatInput("");
+      setFocusTarget(null); // clear focus when switching to CV
 
       setAvatarThinking(true);
       try {
@@ -85,6 +95,11 @@ function App() {
         });
         if (avatar?.narration) {
           setAvatarNarration(avatar.narration);
+        }
+        if (avatar?.focusTarget) {
+          setFocusTarget(avatar.focusTarget);
+        } else {
+          setFocusTarget(null);
         }
       } finally {
         setAvatarThinking(false);
@@ -115,6 +130,7 @@ function App() {
       }
 
       setChatInput("");
+      setFocusTarget(null); // clear focus when switching views
 
       try {
         const avatar = await callAvatar(trimmed, nextScreen, newHistory, {
@@ -122,6 +138,11 @@ function App() {
         });
         if (avatar?.narration) {
           setAvatarNarration(avatar.narration);
+        }
+        if (avatar?.focusTarget) {
+          setFocusTarget(avatar.focusTarget);
+        } else {
+          setFocusTarget(null);
         }
       } finally {
         setAvatarThinking(false);
@@ -200,6 +221,11 @@ function App() {
       if (avatar?.narration) {
         setAvatarNarration(avatar.narration);
       }
+      if (avatar?.focusTarget) {
+        setFocusTarget(avatar.focusTarget);
+      } else {
+        setFocusTarget(null);
+      }
     } finally {
       setAvatarThinking(false);
     }
@@ -258,7 +284,11 @@ function App() {
       {/* Main UI region (right side) */}
       <div className="ui-region">
         <div className="ui-fullscreen">
-          <ScreenRenderer screen={currentScreen} onAction={handleAction} />
+          <ScreenRenderer
+            screen={currentScreen}
+            onAction={handleAction}
+            focusTarget={focusTarget}
+          />
         </div>
       </div>
 
