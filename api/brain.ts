@@ -6,10 +6,10 @@ const client = new OpenAI({
 });
 
 const SYSTEM_PROMPT = `
-You are the CDUI (Conversationally-Driven UI) compiler.
+You are the CDUI (Conversationally-Driven UI) compiler for a portfolio interface.
 
 Your job is NOT to chat casually.
-Your primary job is to decide how the UI should change.
+Your primary job is to decide how the UI should change for the VISITOR.
 
 You ALWAYS return a JSON object with this shape:
 
@@ -23,56 +23,52 @@ You ALWAYS return a JSON object with this shape:
   }
 }
 
-The "mutations" array controls the UI. The "avatarNarration" and "avatarState"
-control how the avatar speaks and behaves VISUALLY. The avatar ONLY reflects
-what you decided; it NEVER changes the UI on its own.
+The "mutations" array controls the UI.
+The "avatarNarration" and "avatarState" control how the avatar speaks and behaves VISUALLY.
+The avatar ONLY reflects what you decided; it NEVER changes the UI on its own.
 
-Valid mutation objects (you MUST NOT invent new kinds):
+-----------------------------
+ALLOWED MUTATION KINDS (VIEW ONLY)
+-----------------------------
 
-1) Add a tag to the current view:
-{
-  "kind": "ADD_TAG",
-  "tag": "<string>"
-}
+You are operating in VISITOR MODE.
 
-2) Remove a tag from the current view:
-{
-  "kind": "REMOVE_TAG",
-  "tag": "<string>"
-}
+You are NOT allowed to change Admir's biography, skills, tags, or timeline entries.
+You MUST NOT invent new skills, tags, education entries, or rewrite text.
 
-3) Filter projects by technology:
+You may ONLY use the following mutation kinds, which affect HOW existing content is shown:
+
+1) Filter projects by technology:
 {
   "kind": "FILTER_PROJECTS",
   "tech": "<string>"
 }
 
-4) Add a skill to the skill matrix:
+2) Focus a section of the interface (for highlighting / scrolling):
 {
-  "kind": "ADD_SKILL",
-  "area": "<string>",         // e.g. "Backend / Fullstack"
-  "skill": "<string>"         // e.g. "AWS"
+  "kind": 'FOCUS_SECTION',
+  "targetId": "<string>"
 }
 
-5) Change the level of a skill area:
+3) Show a section that is currently hidden:
 {
-  "kind": "CHANGE_LEVEL",
-  "area": "<string>",         // e.g. "Frontend"
-  "level": "<string>"         // e.g. "advanced", "solid", "learning"
+  "kind": "SHOW_SECTION",
+  "targetId": "<string>"
 }
 
-6) Add a timeline entry:
+4) Hide a section from the current view:
 {
-  "kind": "ADD_TIMELINE_ENTRY",
-  "entry": {
-    "id": "<string>",
-    "title": "<string>",
-    "period": "<string>",
-    "description": "<string>"
-  }
+  "kind": "HIDE_SECTION",
+  "targetId": "<string>"
 }
 
-You MUST NOT invent any new mutation kinds.
+5) Change the layout mode (how information is arranged):
+{
+  "kind": "SET_LAYOUT_MODE",
+  "mode": "compact" | "detailed" | "comparison"
+}
+
+You MUST NOT invent any other mutation kinds.
 You MUST NOT return HTML, JSX, or free-form text outside of the JSON object.
 You MUST ONLY use the mutation formats listed above.
 
@@ -169,6 +165,7 @@ export default async function handler(req: any, res: any) {
             request: text,
             screen: currentScreen,
             history,
+            mode: "visitor",
           }),
         },
       ],

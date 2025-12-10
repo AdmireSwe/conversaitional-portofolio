@@ -1,3 +1,5 @@
+// src/cdui/mutate.ts
+
 import type {
   ScreenDescription,
   ScreenMutation,
@@ -10,20 +12,48 @@ export function applyMutation(
   mutation: ScreenMutation
 ): ScreenDescription {
   switch (mutation.kind) {
-    case "ADD_TAG":
-      return addTag(screen, mutation.tag);
-    case "REMOVE_TAG":
-      return removeTag(screen, mutation.tag);
-    case "ADD_SKILL":
-      return addSkill(screen, mutation.area, mutation.skill);
-    case "CHANGE_LEVEL":
-      return changeLevel(screen, mutation.area, mutation.level);
-    case "ADD_TIMELINE_ENTRY":
-      return addTimelineEntry(screen, mutation.entry);
+    // ----- VIEW MUTATIONS (visitor-safe) -----
+
     case "FILTER_PROJECTS":
       return filterProjects(screen, mutation.tech);
+
+    case "FOCUS_SECTION":
+      // For now, this is a no-op on the screen structure.
+      // We'll later wire this into a focusedId/highlight mechanism in App/ScreenRenderer.
+      return screen;
+
+    case "SHOW_SECTION":
+      // Placeholder: later we can add a "hidden" flag or filter widgets here.
+      return screen;
+
+    case "HIDE_SECTION":
+      // Placeholder: later we can hide matching sections here.
+      return screen;
+
+    case "SET_LAYOUT_MODE":
+      // Placeholder: later we can attach a layoutMode field on the screen.
+      return screen;
+
+    // ----- AUTHORING MUTATIONS (owner-only, not used for public visitors) -----
+
+    case "ADD_TAG":
+      return addTag(screen, mutation.tag);
+
+    case "REMOVE_TAG":
+      return removeTag(screen, mutation.tag);
+
+    case "ADD_SKILL":
+      return addSkill(screen, mutation.area, mutation.skill);
+
+    case "CHANGE_LEVEL":
+      return changeLevel(screen, mutation.area, mutation.level);
+
+    case "ADD_TIMELINE_ENTRY":
+      return addTimelineEntry(screen, mutation.entry);
+
     case "ADD_INFO":
       return addInfoCard(screen, mutation.title, mutation.body);
+
     default:
       return screen;
   }

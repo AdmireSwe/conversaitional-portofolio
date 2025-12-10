@@ -1,4 +1,4 @@
-// CDUI Core Types — v1 MVP
+// CDUI Core Types — v1.1 (view vs authoring mutations)
 
 import type { Project } from "./projects";
 
@@ -88,17 +88,36 @@ export interface TimelineWidget {
   entries: TimelineEntry[];
 }
 
-// --- Screen mutation model for pseudo-AI refinements ---
+// -----------------------------------------------------------------------------
+// Screen mutation model
+// -----------------------------------------------------------------------------
+// Important design decision:
+// - ViewMutation: safe for visitors, affects ONLY how existing content is shown.
+// - AuthoringMutation: changes portfolio content (owner-only, not used in prod).
+// -----------------------------------------------------------------------------
 
-export type ScreenMutation =
+// Visitor-safe view mutations
+export type ViewMutation =
+  | { kind: "FILTER_PROJECTS"; tech: string }
+  | { kind: "FOCUS_SECTION"; targetId: string }
+  | { kind: "SHOW_SECTION"; targetId: string }
+  | { kind: "HIDE_SECTION"; targetId: string }
+  | {
+      kind: "SET_LAYOUT_MODE";
+      mode: "compact" | "detailed" | "comparison";
+    };
+
+// Authoring mutations — NOT for public visitors, for potential owner mode only
+export type AuthoringMutation =
   | { kind: "ADD_TAG"; tag: string }
   | { kind: "REMOVE_TAG"; tag: string }
   | { kind: "ADD_SKILL"; area: string; skill: string }
   | { kind: "CHANGE_LEVEL"; area: string; level: string }
   | { kind: "ADD_TIMELINE_ENTRY"; entry: TimelineEntry }
-  | { kind: "FILTER_PROJECTS"; tech: string }
-  | { kind: "ADD_INFO"; title: string; body: string }
   | { kind: "ADD_INFO"; title: string; body: string };
+
+// Unified mutation type the rest of the app uses
+export type ScreenMutation = ViewMutation | AuthoringMutation;
 
 // Helper to convert Project[] into a ProjectListWidget
 export function projectListFromProjects(
