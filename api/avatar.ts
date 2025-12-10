@@ -59,13 +59,17 @@ sessionContext may be null. If it is null, behave as if this is the first visit.
 
 IF sessionContext EXISTS AND sessionContext.visits > 1:
 
-- You MUST start the narration with a short "welcome back" style phrase.
-  Examples:
-    - "Welcome back! Let's continue exploring this portfolio."
-    - "Nice to see you here again — let's build on what you've looked at before."
+- The FIRST WORDS of "narration" MUST be a short "welcome back" style phrase.
+  You MUST literally start with one of these (choose the one that fits best):
 
-- You MUST mention previous focus in a light way if you can infer it from "screensViewed"
-  or "lastFocus".
+    "Welcome back! "
+    "Nice to see you again! "
+    "Welcome back, let's continue. "
+
+  Do NOT put anything before this greeting. It must be the first part of the string.
+
+- After the greeting, you SHOULD mention previous focus in a light way if you can
+  infer it from "screensViewed" or "lastFocus".
   Examples:
     - "You've spent time in the CV and timeline views before, so I'll relate this to that."
     - "You seemed interested in backend projects earlier, so I'll connect this to backend work where it makes sense."
@@ -132,6 +136,9 @@ export default async function handler(req: any, res: any) {
     : [];
 
   const sessionContext = compilerContext?.session ?? null;
+
+  // Debug logging so we can verify visits are actually coming through
+  console.log("CDUI avatar sessionContext:", sessionContext);
 
   const payload = {
     userMessage: text,
