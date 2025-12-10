@@ -14,6 +14,7 @@ import { decideFromText } from "./cdui/ai";
 import { callBrain } from "./cdui/brainClient";
 import { callAvatar } from "./cdui/avatarClient";
 import { applyMutation } from "./cdui/mutate";
+import { loadSession, markScreen } from "./cdui/session";
 
 const IS_PROD = import.meta.env.PROD;
 
@@ -26,6 +27,9 @@ type LoopMode =
   | null;
 
 function App() {
+  // Session context (stored in localStorage via loadSession/markScreen)
+  const [session, setSession] = useState(() => loadSession());
+
   const [history, setHistory] = useState<ScreenDescription[]>([homeScreen]);
   const currentScreen = history[history.length - 1];
 
@@ -43,6 +47,11 @@ function App() {
 
   // Loop mode for automatic walkthroughs (e.g. timeline slideshow)
   const [loopMode, setLoopMode] = useState<LoopMode>(null);
+
+  // Whenever the current screen changes, record that in the session
+  useEffect(() => {
+    setSession((prev) => markScreen(prev, currentScreen.screenId));
+  }, [currentScreen.screenId]);
 
   // Drive the loop: when loopMode is active, step through ids one by one
   // and have the avatar explain the current entry.
@@ -84,6 +93,7 @@ function App() {
         const avatar = await callAvatar(userMessage, currentScreen, history, {
           systemPrompt:
             "The UI is automatically looping through timeline entries; describe the currently highlighted one in 2–3 sentences.",
+          session,
         });
 
         if (!cancelled && avatar?.narration) {
@@ -110,7 +120,7 @@ function App() {
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [loopMode, currentScreen, history]);
+  }, [loopMode, currentScreen, history, session]);
 
   // --- button clicks from the CDUI screen (right column) ---
   const handleAction = (actionId: string) => {
@@ -147,6 +157,7 @@ function App() {
       try {
         const avatar = await callAvatar(trimmed, current, prevHistory, {
           systemPrompt: "User navigated back to previous view.",
+          session,
         });
         if (avatar?.narration) {
           setAvatarNarration(avatar.narration);
@@ -176,6 +187,7 @@ function App() {
       try {
         const avatar = await callAvatar(trimmed, nextScreen, newHistory, {
           systemPrompt: "User requested the CV view.",
+          session,
         });
         if (avatar?.narration) {
           setAvatarNarration(avatar.narration);
@@ -217,6 +229,7 @@ function App() {
       try {
         const avatar = await callAvatar(trimmed, nextScreen, newHistory, {
           systemPrompt: compilerSystemPrompt,
+          session,
         });
         if (avatar?.narration) {
           setAvatarNarration(avatar.narration);
@@ -247,6 +260,7 @@ function App() {
           const avatar = await callAvatar(trimmed, current, history, {
             systemPrompt:
               "User requested a loop-through, but there is no timeline on this screen.",
+            session,
           });
           if (avatar?.narration) {
             setAvatarNarration(avatar.narration);
@@ -275,6 +289,7 @@ function App() {
           {
             systemPrompt:
               "User requested an automatic loop through the timeline. Explain that each entry will be highlighted and described in turn.",
+            session,
           }
         );
         if (avatar?.narration) {
@@ -352,6 +367,7 @@ function App() {
       const avatar = await callAvatar(trimmed, screenAfterCompiler, history, {
         systemPrompt: compilerSystemPrompt,
         mutations: compilerMutations,
+        session,
       });
 
       if (avatar?.narration) {
