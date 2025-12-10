@@ -1,4 +1,6 @@
 // src/App.tsx
+import { loadSession, markScreen } from "./cdui/session";
+
 import React, { useState, useEffect } from "react";
 import "./App.css";
 
@@ -14,7 +16,6 @@ import { decideFromText } from "./cdui/ai";
 import { callBrain } from "./cdui/brainClient";
 import { callAvatar } from "./cdui/avatarClient";
 import { applyMutation } from "./cdui/mutate";
-import { loadSession, markScreen } from "./cdui/session";
 
 const IS_PROD = import.meta.env.PROD;
 
@@ -27,7 +28,7 @@ type LoopMode =
   | null;
 
 function App() {
-  // Session context (stored in localStorage via loadSession/markScreen)
+  // --- session context (per visitor) ---
   const [session, setSession] = useState(() => loadSession());
 
   const [history, setHistory] = useState<ScreenDescription[]>([homeScreen]);
@@ -48,7 +49,7 @@ function App() {
   // Loop mode for automatic walkthroughs (e.g. timeline slideshow)
   const [loopMode, setLoopMode] = useState<LoopMode>(null);
 
-  // Whenever the current screen changes, record that in the session
+  // Mark every visited screen in the session
   useEffect(() => {
     setSession((prev) => markScreen(prev, currentScreen.screenId));
   }, [currentScreen.screenId]);
@@ -90,11 +91,16 @@ function App() {
 
       setAvatarThinking(true);
       try {
-        const avatar = await callAvatar(userMessage, currentScreen, history, {
-          systemPrompt:
-            "The UI is automatically looping through timeline entries; describe the currently highlighted one in 2–3 sentences.",
-          session,
-        });
+        const avatar = await callAvatar(
+          userMessage,
+          currentScreen,
+          history,
+          {
+            systemPrompt:
+              "The UI is automatically looping through timeline entries; describe the currently highlighted one in 2–3 sentences.",
+            session, // 👈 pass session
+          }
+        );
 
         if (!cancelled && avatar?.narration) {
           setAvatarNarration(avatar.narration);
@@ -367,7 +373,7 @@ function App() {
       const avatar = await callAvatar(trimmed, screenAfterCompiler, history, {
         systemPrompt: compilerSystemPrompt,
         mutations: compilerMutations,
-        session,
+        session, // 👈 important: pass session here too
       });
 
       if (avatar?.narration) {
