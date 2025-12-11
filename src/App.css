@@ -582,3 +582,104 @@ ul {
   transform: translateY(0);
   box-shadow: 0 3px 8px rgba(15, 23, 42, 0.16);
 }
+
+
+/* ===== Footer & Privacy panel ===== */
+
+.app-footer {
+  position: fixed;
+  bottom: 0.75rem;
+  left: 1rem;
+  z-index: 40;
+  font-size: 0.8rem;
+}
+
+.privacy-link {
+  border: none;
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  background: #e5e7eb;
+  color: #111827;
+  cursor: pointer;
+  font-size: 0.8rem;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+.privacy-link:hover {
+  background: #d1d5db;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+}
+
+/* Backdrop for the privacy dialog */
+.privacy-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.25);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 50;
+}
+
+/* Panel itself */
+.privacy-panel {
+  background: #ffffff;
+  border-radius: 1.25rem 1.25rem 0 0;
+  max-width: 640px;
+  width: 100%;
+  padding: 1.5rem 1.75rem 1.25rem;
+  box-shadow: 0 -12px 30px rgba(15, 23, 42, 0.18);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+@media (min-width: 768px) {
+  .privacy-backdrop {
+    align-items: center;
+  }
+
+  .privacy-panel {
+    border-radius: 1.5rem;
+  }
+}
+
+.privacy-panel h2 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.privacy-panel p {
+  margin: 0.35rem 0;
+  color: #4b5563;
+}
+
+.privacy-panel code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 0.8rem;
+  background: #f3f4f6;
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.3rem;
+}
+
+.privacy-actions {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.privacy-actions button {
+  border-radius: 999px;
+  border: none;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  background: #111827;
+  color: #f9fafb;
+}

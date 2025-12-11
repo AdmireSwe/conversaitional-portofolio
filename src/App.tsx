@@ -49,6 +49,9 @@ function App() {
   // Loop mode for automatic walkthroughs (e.g. timeline slideshow)
   const [loopMode, setLoopMode] = useState<LoopMode>(null);
 
+  // Simple privacy panel toggle
+  const [showPrivacy, setShowPrivacy] = useState(false);
+
   // Mark every visited screen in the session
   useEffect(() => {
     setSession((prev) => markScreen(prev, currentScreen.screenId));
@@ -91,16 +94,11 @@ function App() {
 
       setAvatarThinking(true);
       try {
-        const avatar = await callAvatar(
-          userMessage,
-          currentScreen,
-          history,
-          {
-            systemPrompt:
-              "The UI is automatically looping through timeline entries; describe the currently highlighted one in 2–3 sentences.",
-            session, // 👈 pass session
-          }
-        );
+        const avatar = await callAvatar(userMessage, currentScreen, history, {
+          systemPrompt:
+            "The UI is automatically looping through timeline entries; describe the currently highlighted one in 2–3 sentences.",
+          session, // 👈 pass session
+        });
 
         if (!cancelled && avatar?.narration) {
           setAvatarNarration(avatar.narration);
@@ -481,6 +479,64 @@ function App() {
           </form>
         </div>
       </div>
+
+      {/* Simple footer with Datenschutz link */}
+      <footer className="app-footer">
+        <button
+          type="button"
+          className="privacy-link"
+          onClick={() => setShowPrivacy(true)}
+        >
+          Datenschutz & Cookies
+        </button>
+      </footer>
+
+      {/* Privacy panel */}
+      {showPrivacy && (
+        <div
+          className="privacy-backdrop"
+          onClick={() => setShowPrivacy(false)}
+        >
+          <div
+            className="privacy-panel"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2>Datenschutz & lokale Speicherung</h2>
+            <p>
+              Diese Seite speichert eine kleine Sitzungsinfo im Browser
+              (<code>cdui_session</code>). Damit merkt sich die Oberfläche z.B.,
+              wie oft Sie die Seite besucht haben und welche Bereiche Sie sich
+              öfter ansehen (z.B. CV oder Projekte).
+            </p>
+            <p>
+              Diese Daten bleiben auf diesem Gerät im lokalen Speicher
+              (localStorage), werden nicht an Werbenetzwerke verkauft und dienen
+              nur dazu, die Darstellung der Portfolio-Oberfläche leicht
+              anzupassen.
+            </p>
+            <p>
+              Für die sprachliche Antwort des Avatars sowie einige
+              Interface-Entscheidungen wird ein KI-Dienst von OpenAI verwendet.
+              Ihre Eingaben werden ausschließlich zu diesem Zweck verarbeitet.
+            </p>
+            <p>
+              Wenn Sie nicht möchten, dass eine Sitzung gespeichert wird,
+              können Sie im Browser den lokalen Speicher / Website-Daten für
+              diese Seite löschen. Die Seite funktioniert dann weiterhin, merkt
+              sich aber nichts zwischen den Besuchen.
+            </p>
+
+            <div className="privacy-actions">
+              <button
+                type="button"
+                onClick={() => setShowPrivacy(false)}
+              >
+                Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
