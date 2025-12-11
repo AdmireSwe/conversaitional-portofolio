@@ -59,8 +59,15 @@ function App() {
   const personaPref: PersonaPreference = getPersonaPreference(session);
 
   const handlePersonaChange = (pref: PersonaPreference) => {
-    setSession((prev) => setPersonaPreference(prev, pref));
-  };
+  console.log("Persona changed to:", pref);
+  setSession((prev) => {
+    console.log("Before:", prev);
+    const updated = setPersonaPreference(prev, pref);
+    console.log("After:", updated);
+    return updated;
+  });
+};
+
 
   // Mark every visited screen in the session
   useEffect(() => {
