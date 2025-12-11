@@ -9,6 +9,8 @@ export interface SessionContext {
   personaHints: string[];
 }
 
+export type PersonaPreference = "balanced" | "concise" | "detailed";
+
 const KEY = "cdui_session";
 
 function saveSession(ctx: SessionContext) {
@@ -83,6 +85,44 @@ export function markScreen(
       [screenId]: count + 1,
     },
     lastFocus: screenId,
+    lastVisit: Date.now(),
+  };
+
+  saveSession(updated);
+  return updated;
+}
+
+/**
+ * Map personaHints → a single preference flag for the UI.
+ */
+export function getPersonaPreference(ctx: SessionContext): PersonaPreference {
+  if (ctx.personaHints.includes("pref_concise")) return "concise";
+  if (ctx.personaHints.includes("pref_detailed")) return "detailed";
+  return "balanced";
+}
+
+/**
+ * Update personaHints based on a selected preference.
+ * We keep other non-pref_* hints, but ensure only one pref_* entry exists.
+ */
+export function setPersonaPreference(
+  ctx: SessionContext,
+  pref: PersonaPreference
+): SessionContext {
+  const baseHints = ctx.personaHints.filter((h) => !h.startsWith("pref_"));
+
+  let newHints = baseHints;
+
+  if (pref === "concise") {
+    newHints = [...baseHints, "pref_concise"];
+  } else if (pref === "detailed") {
+    newHints = [...baseHints, "pref_detailed"];
+  }
+  // "balanced" => no explicit pref_* hint, default behavior
+
+  const updated: SessionContext = {
+    ...ctx,
+    personaHints: newHints,
     lastVisit: Date.now(),
   };
 

@@ -1,5 +1,11 @@
 // src/App.tsx
-import { loadSession, markScreen } from "./cdui/session";
+import {
+  loadSession,
+  markScreen,
+  getPersonaPreference,
+  setPersonaPreference,
+  type PersonaPreference,
+} from "./cdui/session";
 
 import React, { useState, useEffect } from "react";
 import "./App.css";
@@ -49,8 +55,12 @@ function App() {
   // Loop mode for automatic walkthroughs (e.g. timeline slideshow)
   const [loopMode, setLoopMode] = useState<LoopMode>(null);
 
-  // Simple privacy panel toggle
-  const [showPrivacy, setShowPrivacy] = useState(false);
+  // Current persona preference derived from the session
+  const personaPref: PersonaPreference = getPersonaPreference(session);
+
+  const handlePersonaChange = (pref: PersonaPreference) => {
+    setSession((prev) => setPersonaPreference(prev, pref));
+  };
 
   // Mark every visited screen in the session
   useEffect(() => {
@@ -218,7 +228,7 @@ function App() {
 
       if (result.kind === "push") {
         nextScreen = result.screen;
-        newHistory = [...history, result.screen];
+        newHistory = [...history, nextScreen];
         setHistory(newHistory);
         compilerSystemPrompt = result.systemPrompt;
         if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
@@ -321,7 +331,7 @@ function App() {
       if (result.kind === "push") {
         compilerSystemPrompt = result.systemPrompt;
         screenAfterCompiler = result.screen;
-        setHistory((prev) => [...prev, result.screen]);
+        setHistory((prev) => [...prev, screenAfterCompiler]);
         if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
       } else {
         compilerSystemPrompt = result.systemPrompt;
@@ -338,7 +348,7 @@ function App() {
         if (result.kind === "push") {
           compilerSystemPrompt = result.systemPrompt;
           screenAfterCompiler = result.screen;
-          setHistory((prev) => [...prev, result.screen]);
+          setHistory((prev) => [...prev, screenAfterCompiler]);
           if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
         } else {
           compilerSystemPrompt = result.systemPrompt;
@@ -423,6 +433,40 @@ function App() {
           </div>
         </div>
 
+        {/* Persona style toggle */}
+        <div className="avatar-persona">
+          <span className="avatar-persona-label">Avatar style</span>
+          <div className="avatar-persona-buttons">
+            <button
+              type="button"
+              className={`avatar-persona-button ${
+                personaPref === "balanced" ? "is-active" : ""
+              }`}
+              onClick={() => handlePersonaChange("balanced")}
+            >
+              Balanced
+            </button>
+            <button
+              type="button"
+              className={`avatar-persona-button ${
+                personaPref === "concise" ? "is-active" : ""
+              }`}
+              onClick={() => handlePersonaChange("concise")}
+            >
+              Concise
+            </button>
+            <button
+              type="button"
+              className={`avatar-persona-button ${
+                personaPref === "detailed" ? "is-active" : ""
+              }`}
+              onClick={() => handlePersonaChange("detailed")}
+            >
+              Detailed
+            </button>
+          </div>
+        </div>
+
         {/* TALK BUTTON UNDER THE AVATAR CARD */}
         <div className="avatar-talk-wrapper">
           <button
@@ -479,64 +523,6 @@ function App() {
           </form>
         </div>
       </div>
-
-      {/* Simple footer with Datenschutz link */}
-      <footer className="app-footer">
-        <button
-          type="button"
-          className="privacy-link"
-          onClick={() => setShowPrivacy(true)}
-        >
-          Datenschutz & Cookies
-        </button>
-      </footer>
-
-      {/* Privacy panel */}
-      {showPrivacy && (
-        <div
-          className="privacy-backdrop"
-          onClick={() => setShowPrivacy(false)}
-        >
-          <div
-            className="privacy-panel"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2>Datenschutz & lokale Speicherung</h2>
-            <p>
-              Diese Seite speichert eine kleine Sitzungsinfo im Browser
-              (<code>cdui_session</code>). Damit merkt sich die Oberfläche z.B.,
-              wie oft Sie die Seite besucht haben und welche Bereiche Sie sich
-              öfter ansehen (z.B. CV oder Projekte).
-            </p>
-            <p>
-              Diese Daten bleiben auf diesem Gerät im lokalen Speicher
-              (localStorage), werden nicht an Werbenetzwerke verkauft und dienen
-              nur dazu, die Darstellung der Portfolio-Oberfläche leicht
-              anzupassen.
-            </p>
-            <p>
-              Für die sprachliche Antwort des Avatars sowie einige
-              Interface-Entscheidungen wird ein KI-Dienst von OpenAI verwendet.
-              Ihre Eingaben werden ausschließlich zu diesem Zweck verarbeitet.
-            </p>
-            <p>
-              Wenn Sie nicht möchten, dass eine Sitzung gespeichert wird,
-              können Sie im Browser den lokalen Speicher / Website-Daten für
-              diese Seite löschen. Die Seite funktioniert dann weiterhin, merkt
-              sich aber nichts zwischen den Besuchen.
-            </p>
-
-            <div className="privacy-actions">
-              <button
-                type="button"
-                onClick={() => setShowPrivacy(false)}
-              >
-                Schließen
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
