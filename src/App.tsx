@@ -186,14 +186,13 @@ function App() {
 
       // Force a greeting so you can immediately confirm audio works.
       voiceClient.sendEvent({
-        type: "response.create",
-        response: {
-          // ✅ match server constraint: ONE output modality
-          output_modalities: ["audio"],
-          instructions:
-            "Greet the visitor in one short sentence and ask what they want to see, such as their CV or projects.",
-        },
-      });
+  type: "response.create",
+  response: {
+    instructions:
+      "Hello! I’m the portfolio avatar. You can say things like: show me your CV, show me projects, or loop the timeline.",
+  },
+});
+
     } catch (e: any) {
       setVoiceError(String(e?.message ?? e));
       setVoiceStatus("error");

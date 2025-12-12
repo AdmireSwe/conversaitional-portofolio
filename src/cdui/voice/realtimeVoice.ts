@@ -11,6 +11,9 @@ export class RealtimeVoiceClient {
 
   private audioEl: HTMLAudioElement | null = null;
 
+  private dcOpenPromise: Promise<void> | null = null;
+  private dcOpenResolve: (() => void) | null = null;
+
   status: RealtimeVoiceStatus = "idle";
   onStatus?: (s: RealtimeVoiceStatus) => void;
   onEvent?: RealtimeEventHandler;
@@ -32,6 +35,14 @@ export class RealtimeVoiceClient {
     return this.status === "connected" && !!this.pc;
   }
 
+  private ensureDcOpenPromise() {
+    if (this.dcOpenPromise) return this.dcOpenPromise;
+    this.dcOpenPromise = new Promise<void>((resolve) => {
+      this.dcOpenResolve = resolve;
+    });
+    return this.dcOpenPromise;
+  }
+
   async connect(clientSecret: string) {
     if (this.pc) return;
 
@@ -40,7 +51,7 @@ export class RealtimeVoiceClient {
     // 1) Setup peer connection
     this.pc = new RTCPeerConnection();
 
-    // Helpful debug signals
+    // Debug (super useful)
     this.pc.oniceconnectionstatechange = () => {
       // eslint-disable-next-line no-console
       console.log("[webrtc] iceConnectionState:", this.pc?.iceConnectionState);
@@ -54,19 +65,15 @@ export class RealtimeVoiceClient {
     try {
       this.pc.addTransceiver("audio", { direction: "sendrecv" });
     } catch {
-      // ignore (older browsers)
+      // ignore
     }
 
-    // 2) Create a dedicated audio element for remote playback
+    // 2) Create audio element for remote playback
     this.audioEl = document.createElement("audio");
     this.audioEl.autoplay = true;
     this.audioEl.muted = false;
     this.audioEl.volume = 1;
-
-    // "playsinline" avoids weird iOS behavior; harmless elsewhere
     this.audioEl.setAttribute("playsinline", "true");
-
-    // Ensure it exists in DOM (some browsers behave better)
     this.audioEl.style.display = "none";
     document.body.appendChild(this.audioEl);
 
@@ -74,12 +81,11 @@ export class RealtimeVoiceClient {
     this.pc.ontrack = async (e) => {
       const [stream] = e.streams;
       // eslint-disable-next-line no-console
-      console.log("[webrtc] ontrack:", e.track?.kind, "streams:", e.streams?.length);
+      console.log("[webrtc] ontrack: audio streams:", e.streams?.length ?? 0);
 
       if (stream && this.audioEl) {
         this.audioEl.srcObject = stream;
 
-        // Autoplay can be blocked; attempt play() after track
         try {
           await this.audioEl.play();
           // eslint-disable-next-line no-console
@@ -91,16 +97,27 @@ export class RealtimeVoiceClient {
       }
     };
 
-    // 4) Data channel for events (transcripts, state, etc.)
+    // 4) Data channel for events
+    this.ensureDcOpenPromise();
     this.dc = this.pc.createDataChannel("oai-events");
+
     this.dc.onopen = () => {
       // eslint-disable-next-line no-console
       console.log("[webrtc] datachannel open");
+      this.dcOpenResolve?.();
+      this.dcOpenResolve = null;
     };
-    this.dc.onerror = (e) => {
+
+    this.dc.onclose = () => {
       // eslint-disable-next-line no-console
-      console.warn("[webrtc] datachannel error", e);
+      console.log("[webrtc] datachannel closed");
     };
+
+    this.dc.onerror = (err) => {
+      // eslint-disable-next-line no-console
+      console.error("[webrtc] datachannel error:", err);
+    };
+
     this.dc.onmessage = (m) => {
       try {
         const evt = JSON.parse(m.data);
@@ -110,7 +127,7 @@ export class RealtimeVoiceClient {
       }
     };
 
-    // 5) Get microphone
+    // 5) Microphone
     this.micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: true,
@@ -120,16 +137,16 @@ export class RealtimeVoiceClient {
       video: false,
     });
 
-    // 6) Send mic track(s) to the peer connection
+    // 6) Send mic tracks
     for (const track of this.micStream.getTracks()) {
       this.pc.addTrack(track, this.micStream);
     }
 
-    // 7) Create offer SDP
+    // 7) Offer/LocalDescription
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
 
-    // 8) Exchange SDP with OpenAI Realtime (WebRTC)
+    // 8) Exchange SDP with OpenAI Realtime
     const sdpResp = await fetch("https://api.openai.com/v1/realtime/calls", {
       method: "POST",
       headers: {
@@ -148,11 +165,20 @@ export class RealtimeVoiceClient {
     const answerSdp = await sdpResp.text();
     await this.pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
 
+    // ✅ CRITICAL FIX:
+    // Wait for the data channel to be open before reporting "connected".
+    // Otherwise, App.tsx may send response.create too early and it gets dropped.
+    await this.dcOpenPromise;
+
     this.setStatus("connected");
   }
 
   sendEvent(evt: any) {
-    if (!this.dc || this.dc.readyState !== "open") return;
+    if (!this.dc || this.dc.readyState !== "open") {
+      // eslint-disable-next-line no-console
+      console.warn("[realtime] sendEvent dropped (dc not open):", evt?.type);
+      return;
+    }
     this.dc.send(JSON.stringify(evt));
   }
 
@@ -180,6 +206,9 @@ export class RealtimeVoiceClient {
       this.audioEl.remove();
       this.audioEl = null;
     }
+
+    this.dcOpenPromise = null;
+    this.dcOpenResolve = null;
 
     this.setStatus("idle");
   }
