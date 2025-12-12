@@ -193,13 +193,13 @@ function App() {
       // Force a greeting so you can *immediately* confirm audio works.
       // If you hear this, output audio is working, and we can focus on input transcription wiring.
       voiceClient.sendEvent({
-        type: "response.create",
-        response: {
-          output_modalities: ["audio", "text"],
-          instructions:
-            "Greet the visitor in one short sentence and ask what they want to see (CV, projects, timeline).",
-        },
-      });
+  type: "response.create",
+  response: {
+    instructions:
+      "Greet the visitor in one short sentence and ask what they want to see, such as their CV or projects.",
+  },
+});
+
     } catch (e: any) {
       setVoiceError(String(e?.message ?? e));
       setVoiceStatus("error");

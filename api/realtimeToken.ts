@@ -1,6 +1,4 @@
 // api/realtimeToken.ts
-// Creates a client-safe ephemeral token for OpenAI Realtime (speech-to-speech)
-
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 export const config = {
@@ -18,54 +16,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "Missing OPENAI_API_KEY env var" });
   }
 
-  // Realtime session config (WebRTC)
-  // Important bits:
-  // - output_modalities enables audio responses
-  // - audio.input.transcription enables user speech -> transcript events
-  // - audio.input.turn_detection controls server-side VAD + auto response
+  /**
+   * IMPORTANT:
+   * - Realtime GA supports ONE modality per session
+   * - We choose AUDIO ONLY
+   * - Text is handled locally via transcript events
+   */
   const sessionConfig = {
     session: {
       type: "realtime",
       model: "gpt-realtime",
-
-      // THIS is critical: without output_modalities including "audio",
-      // you can end up with a connected call but no spoken output.
-      output_modalities: ["audio", "text"],
-
       instructions:
-        "You are the Conversationally-Driven UI (CDUI) avatar for Admir’s portfolio. " +
-        "Speak naturally and conversationally. Ask short clarifying questions when needed. " +
-        "If the user asks to see something (CV, projects, timeline), respond briefly and clearly.",
-
+        "You are the CDUI avatar. Speak naturally. Keep responses short.",
       audio: {
-        output: {
-          voice: "marin",
-        },
-        input: {
-          // Enable speech-to-text events so the UI can react to "show me your CV"
-          transcription: {
-            // Pick one of the supported realtime transcription models
-            // (this one is fast/cheap and good enough for commands)
-            model: "gpt-4o-mini-transcribe",
-            language: "en",
-          },
-
-          // Server-side voice activity detection (VAD)
-          // This makes turns “commit” automatically.
-          turn_detection: {
-            type: "server_vad",
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 500,
-
-            // IMPORTANT: tells the server to automatically create a response
-            // when a user turn is detected.
-            create_response: true,
-          },
-
-          // Optional; helps noisy mics
-          noise_reduction: { type: "near_field" },
-        },
+        output: { voice: "marin" },
+      },
+      turn_detection: {
+        type: "server_vad",
+        threshold: 0.5,
+        silence_duration_ms: 400,
+        create_response: true,
       },
     },
   };
@@ -80,27 +50,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify(sessionConfig),
     });
 
-    const data = (await r.json().catch(() => null)) as any;
+    const data = await r.json();
 
     if (!r.ok) {
       return res.status(r.status).json({
         error: "Failed to create client secret",
-        details: data ?? null,
+        details: data,
       });
     }
 
-    const clientSecret = data?.value;
-    if (!clientSecret || typeof clientSecret !== "string") {
-      return res.status(500).json({
-        error: "Unexpected response shape from OpenAI",
-        details: data ?? null,
-      });
-    }
-
-    return res.status(200).json({ clientSecret });
+    return res.status(200).json({ clientSecret: data.value });
   } catch (err: any) {
-    return res
-      .status(500)
-      .json({ error: "Unexpected error", details: String(err) });
+    return res.status(500).json({
+      error: "Unexpected error",
+      details: String(err),
+    });
   }
 }
