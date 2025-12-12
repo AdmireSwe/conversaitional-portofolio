@@ -21,21 +21,29 @@ body {
   flex-direction: column;
 }
 
-/* Main UI region (top part with the portfolio content) */
+/* ===== Main UI region (portfolio content) ===== */
+/* Full width. In active mode, we offset by avatar width. */
+
 .ui-region {
   flex: 1;
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 2.5rem 1.5rem 7rem;
-  /* leave space on the left so we don't sit under the avatar */
-  margin-left: 380px;
+  justify-content: stretch;      /* ✅ not centered */
+  align-items: stretch;          /* ✅ fill vertical available space */
+  padding: 2rem 2rem 7rem;       /* room for chat dock */
+  margin-left: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.app-shell.app-active .ui-region {
+  margin-left: 380px;            /* space for fixed avatar column */
+  width: calc(100% - 380px);     /* ✅ take all remaining width */
 }
 
 /* Screen container with subtle fade-in */
 .ui-fullscreen {
   width: 100%;
-  max-width: 960px;
+  max-width: none;               /* ✅ remove the 960px box */
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -53,18 +61,33 @@ body {
   }
 }
 
-/* ===== Avatar column (card + talk button, pinned left) ===== */
+/* ===== Avatar column (card + controls) ===== */
+/* Always fixed, but position changes between intro center and active with animation */
 
 .avatar-column {
-  position: fixed;          /* stays visible regardless of scroll */
-  top: 2rem;
-  left: 2rem;
+  position: fixed;
   width: 340px;
-  z-index: 9999;            /* above main content */
+  z-index: 9999;
 
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+
+  transition: top 600ms ease, left 600ms ease, transform 600ms ease;
+}
+
+/* Intro: centered */
+.app-shell.app-intro .avatar-column {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Active: pinned to top-left */
+.app-shell.app-active .avatar-column {
+  top: 2rem;
+  left: 2rem;
+  transform: translate(0, 0);
 }
 
 /* Avatar card itself */
@@ -79,8 +102,14 @@ body {
 
 /* nice fade-in */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .avatar-header {
@@ -113,7 +142,113 @@ body {
   color: #111827;
 }
 
-/* Talk button under the avatar card */
+/* ===== Intro mode buttons ===== */
+
+.avatar-mode-chooser {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.avatar-mode-button {
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  background: #111827;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.25);
+  text-align: left;
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+}
+
+.avatar-mode-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.3);
+}
+
+.avatar-mode-button:active {
+  transform: translateY(0);
+  box-shadow: 0 5px 12px rgba(15, 23, 42, 0.2);
+}
+
+/* ===== Persona controls ===== */
+
+.avatar-persona {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.avatar-persona-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.avatar-persona-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.avatar-persona-button {
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.75rem;
+  background: #f9fafb;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.avatar-persona-button:hover {
+  background: #eef2ff;
+  border-color: #4f46e5;
+  transform: translateY(-1px);
+}
+
+.avatar-persona-button.is-active {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: white;
+}
+
+/* ===== Mode switcher (after active) ===== */
+
+.avatar-mode-switcher {
+  margin-top: 0.5rem;
+  display: flex;
+}
+
+.avatar-mode-switcher-button {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.85rem;
+  background: #e5e7eb;
+  color: #111827;
+  border-radius: 999px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+}
+
+.avatar-mode-switcher-button:hover {
+  background: #d1d5db;
+  transform: translateY(-1px);
+}
+
+.avatar-mode-switcher-button:active {
+  transform: translateY(0);
+}
+
+/* ===== Talk button under the avatar card (text-mode) ===== */
+
 .avatar-talk-wrapper {
   display: flex;
   justify-content: flex-start;
@@ -147,7 +282,6 @@ body {
 
 /* ===== Docked chat panel ===== */
 
-/* Chat dock is fixed at the bottom, centered card */
 .chat-dock {
   position: fixed;
   left: 0;
@@ -155,10 +289,9 @@ body {
   bottom: 0;
   display: flex;
   justify-content: center;
-  pointer-events: none; /* let only the box receive clicks */
+  pointer-events: none;
 }
 
-/* Hidden/visible states controlled from React */
 .chat-dock-hidden {
   opacity: 0;
   pointer-events: none;
@@ -171,7 +304,6 @@ body {
   transform: translateY(0);
 }
 
-/* The actual chat card */
 .chat-box {
   pointer-events: auto;
   max-width: 720px;
@@ -251,13 +383,11 @@ body {
   font-size: 0.85rem;
 }
 
-/* Primary commit button */
 .chat-buttons button[type="submit"] {
   background: #2563eb;
   color: #ffffff;
 }
 
-/* Secondary "Close chat" button */
 .chat-buttons button[type="button"] {
   background: #e2e8f0;
   color: #0f172a;
@@ -279,7 +409,7 @@ ul {
   margin-top: 1.5rem;
   background: #f5f7fb;
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
-  max-width: 720px;
+  max-width: none; /* ✅ allow full width */
   animation: cduiFadeIn 0.3s ease-out;
 }
 
@@ -313,7 +443,6 @@ ul {
   gap: 0.5rem;
 }
 
-/* Subtle pop-in animation for new tags */
 @keyframes chipPop {
   from {
     opacity: 0;
@@ -325,7 +454,8 @@ ul {
   }
 }
 
-.tag-chip {
+.tag-chip,
+.skill-chip {
   border-radius: 999px;
   padding: 0.3rem 0.8rem;
   font-size: 0.85rem;
@@ -335,21 +465,16 @@ ul {
   animation: chipPop 0.25s ease-out;
 }
 
-/* Reuse the same animation for skill chips */
 .skill-chip {
-  border-radius: 999px;
   padding: 0.2rem 0.6rem;
   font-size: 0.8rem;
-  background: #e2e8f0;
-  color: #0f172a;
-  animation: chipPop 0.25s ease-out;
 }
 
 /* ===== Timeline ===== */
 
 .timeline {
   margin-top: 1.5rem;
-  max-width: 720px;
+  max-width: none; /* ✅ full width */
 }
 
 .timeline-title {
@@ -383,18 +508,6 @@ ul {
   background: #0f172a;
 }
 
-.timeline-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-.timeline-header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
 .timeline-period {
   font-size: 0.8rem;
   color: #64748b;
@@ -416,8 +529,6 @@ ul {
   color: #475569;
 }
 
-/* ===== Focused timeline entry highlight ===== */
-
 .timeline-item-focused {
   background: #eef2ff;
   border-radius: 10px;
@@ -436,12 +547,11 @@ ul {
   color: #111827;
 }
 
-
 /* ===== Skill matrix ===== */
 
 .skill-matrix {
   margin-top: 1.5rem;
-  max-width: 720px;
+  max-width: none; /* ✅ full width */
 }
 
 .skill-matrix-title {
@@ -487,30 +597,13 @@ ul {
   color: #64748b;
 }
 
-/* ===== Responsive: collapse avatar on small screens ===== */
-
-@media (max-width: 900px) {
-  .avatar-column {
-    position: static;
-    width: auto;
-    margin: 1rem;
-  }
-
-  .ui-region {
-    margin-left: 0;
-    padding-top: 1rem;
-  }
-}
-
-/* ===== Project list styling & transitions ===== */
+/* ===== Project list ===== */
 
 .project-list {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   margin-top: 1.25rem;
-
-  /* Fade-in whenever the project list is newly mounted (e.g. after filtering) */
   animation: projectListFadeIn 0.3s ease-out;
 }
 
@@ -546,12 +639,11 @@ ul {
   gap: 0.3rem;
 }
 
-/* Reuse tag-chip styling but allow a bit of spacing specificity if needed */
 .project-tech-chip {
   font-size: 0.78rem;
 }
 
-/* ===== Button row styling ===== */
+/* ===== Button row ===== */
 
 .button-row {
   display: flex;
@@ -583,182 +675,21 @@ ul {
   box-shadow: 0 3px 8px rgba(15, 23, 42, 0.16);
 }
 
+/* ===== Responsive ===== */
 
-/* ===== Footer & Privacy panel ===== */
-
-.app-footer {
-  position: fixed;
-  bottom: 0.75rem;
-  left: 1rem;
-  z-index: 40;
-  font-size: 0.8rem;
-}
-
-.privacy-link {
-  border: none;
-  border-radius: 999px;
-  padding: 0.4rem 0.9rem;
-  background: #e5e7eb;
-  color: #111827;
-  cursor: pointer;
-  font-size: 0.8rem;
-  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
-  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
-}
-
-.privacy-link:hover {
-  background: #d1d5db;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
-}
-
-/* Backdrop for the privacy dialog */
-.privacy-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.25);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  z-index: 50;
-}
-
-/* Panel itself */
-.privacy-panel {
-  background: #ffffff;
-  border-radius: 1.25rem 1.25rem 0 0;
-  max-width: 640px;
-  width: 100%;
-  padding: 1.5rem 1.75rem 1.25rem;
-  box-shadow: 0 -12px 30px rgba(15, 23, 42, 0.18);
-  font-size: 0.9rem;
-  line-height: 1.5;
-}
-
-@media (min-width: 768px) {
-  .privacy-backdrop {
-    align-items: center;
+@media (max-width: 900px) {
+  .avatar-column {
+    position: static;
+    width: auto;
+    margin: 1rem;
+    transform: none !important;
+    top: auto !important;
+    left: auto !important;
   }
 
-  .privacy-panel {
-    border-radius: 1.5rem;
+  .ui-region {
+    margin-left: 0 !important;
+    width: 100% !important;
+    padding-top: 1rem;
   }
-}
-
-.privacy-panel h2 {
-  margin-top: 0;
-  margin-bottom: 0.75rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #111827;
-}
-
-.privacy-panel p {
-  margin: 0.35rem 0;
-  color: #4b5563;
-}
-
-.privacy-panel code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", "Courier New", monospace;
-  font-size: 0.8rem;
-  background: #f3f4f6;
-  padding: 0.1rem 0.3rem;
-  border-radius: 0.3rem;
-}
-
-.privacy-actions {
-  margin-top: 0.75rem;
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-
-.privacy-actions button {
-  border-radius: 999px;
-  border: none;
-  padding: 0.4rem 0.9rem;
-  font-size: 0.85rem;
-  cursor: pointer;
-  background: #111827;
-  color: #f9fafb;
-}
-
-
-/* === Avatar persona controls === */
-
-.avatar-persona {
-  margin-top: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.avatar-persona-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #6b7280;
-}
-
-.avatar-persona-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.avatar-persona-button {
-  border-radius: 999px;
-  border: 1px solid #e5e7eb;
-  padding: 0.25rem 0.7rem;
-  font-size: 0.75rem;
-  background: #f9fafb;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease,
-    transform 0.1s ease;
-}
-
-.avatar-persona-button:hover {
-  background: #eef2ff;
-  border-color: #4f46e5;
-  transform: translateY(-1px);
-}
-
-.avatar-persona-button.is-active {
-  background: #4f46e5;
-  border-color: #4f46e5;
-  color: white;
-}
-
-.avatar-voice-toggle {
-  margin-top: 0.5rem;
-  display: flex;
-  justify-content: flex-start;
-}
-
-.avatar-voice-button {
-  padding: 0.35rem 0.9rem;
-  border-radius: 999px;
-  border: 1px solid #e5e7eb;
-  background: #f9fafb;
-  font-size: 0.8rem;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  transition: background 0.12s ease-out, box-shadow 0.12s ease-out,
-    transform 0.12s ease-out, border-color 0.12s ease-out;
-}
-
-.avatar-voice-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
-}
-
-.avatar-voice-button.is-on {
-  background: #111827;
-  color: #ffffff;
-  border-color: #111827;
 }

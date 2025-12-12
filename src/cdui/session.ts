@@ -29,7 +29,7 @@ function freshSession(): SessionContext {
     screensViewed: {},
     lastFocus: null,
     personaHints: [],
-    voiceEnabled: false, // default: voice off
+    voiceEnabled: false,
   };
 }
 
@@ -51,13 +51,13 @@ export function loadSession(): SessionContext {
     const normalized: SessionContext = {
       visits:
         typeof stored.visits === "number" && stored.visits >= 0
-          ? stored.visits + 1 // 👈 count this new visit
+          ? stored.visits + 1
           : 1,
       lastVisit: Date.now(),
       screensViewed: stored.screensViewed ?? {},
       lastFocus: stored.lastFocus ?? null,
       personaHints: stored.personaHints ?? [],
-      voiceEnabled: stored.voiceEnabled === true, // 👈 restore saved preference
+      voiceEnabled: typeof stored.voiceEnabled === "boolean" ? stored.voiceEnabled : false,
     };
 
     saveSession(normalized);
@@ -75,10 +75,7 @@ export function loadSession(): SessionContext {
  * - lastFocus
  * - lastVisit
  */
-export function markScreen(
-  ctx: SessionContext,
-  screenId: string
-): SessionContext {
+export function markScreen(ctx: SessionContext, screenId: string): SessionContext {
   const count = ctx.screensViewed[screenId] ?? 0;
 
   const updated: SessionContext = {
@@ -121,28 +118,10 @@ export function setPersonaPreference(
   } else if (pref === "detailed") {
     newHints = [...baseHints, "pref_detailed"];
   }
-  // "balanced" => no explicit pref_* hint, default behavior
 
   const updated: SessionContext = {
     ...ctx,
     personaHints: newHints,
-    lastVisit: Date.now(),
-  };
-
-  saveSession(updated);
-  return updated;
-}
-
-/**
- * Enable / disable voice narration preference.
- */
-export function setVoicePreference(
-  ctx: SessionContext,
-  enabled: boolean
-): SessionContext {
-  const updated: SessionContext = {
-    ...ctx,
-    voiceEnabled: enabled,
     lastVisit: Date.now(),
   };
 

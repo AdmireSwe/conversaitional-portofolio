@@ -5,18 +5,13 @@ import {
   getPersonaPreference,
   setPersonaPreference,
   type PersonaPreference,
-  setVoicePreference, // 👈 NEW
 } from "./cdui/session";
 
 import React, { useState, useEffect } from "react";
 import "./App.css";
 
 import { ScreenRenderer } from "./cdui/components/ScreenRenderer";
-import type {
-  ScreenDescription,
-  ScreenMutation,
-  TimelineWidget,
-} from "./cdui/types";
+import type { ScreenDescription, ScreenMutation, TimelineWidget } from "./cdui/types";
 import { parseIntent, type Intent } from "./cdui/intent";
 import { homeScreen, cvScreen } from "./cdui/screens";
 import { decideFromText } from "./cdui/ai";
@@ -34,6 +29,8 @@ type LoopMode =
     }
   | null;
 
+type InteractionMode = "chooser" | "text" | "voice";
+
 function App() {
   // --- session context (per visitor) ---
   const [session, setSession] = useState(() => loadSession());
@@ -48,6 +45,11 @@ function App() {
 
   const [avatarNarration, setAvatarNarration] = useState<string | null>(null);
   const [avatarThinking, setAvatarThinking] = useState(false);
+
+  // Interaction mode: before first choice we’re in "chooser"
+  const [mode, setMode] = useState<InteractionMode>("chooser");
+
+  // Chat dock only exists/works in text mode
   const [showChat, setShowChat] = useState(false);
 
   // Which UI element/section is currently in focus (for highlighting/scrolling)
@@ -56,6 +58,9 @@ function App() {
   // Loop mode for automatic walkthroughs (e.g. timeline slideshow)
   const [loopMode, setLoopMode] = useState<LoopMode>(null);
 
+  // Has the UI "woken up" and slid left / rendered main screen?
+  const [hasActivatedUI, setHasActivatedUI] = useState(false);
+
   // Current persona preference derived from the session
   const personaPref: PersonaPreference = getPersonaPreference(session);
 
@@ -63,35 +68,15 @@ function App() {
     setSession((prev) => setPersonaPreference(prev, pref));
   };
 
-  // --- voice: speak avatar narration if enabled ---
+  const isIntro = !hasActivatedUI;
+
+  // Mark screen views only after UI is activated (avoids counting intro idle time)
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    // If voice is off, cancel any ongoing speech
-    if (!session.voiceEnabled) {
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
-      return;
-    }
-
-    if (!avatarNarration) return;
-    if (!("speechSynthesis" in window)) return;
-
-    const utterance = new SpeechSynthesisUtterance(avatarNarration);
-
-    // Cancel previous utterances so we don't overlap
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-  }, [avatarNarration, session.voiceEnabled]);
-
-  // Mark every visited screen in the session
-  useEffect(() => {
+    if (!hasActivatedUI) return;
     setSession((prev) => markScreen(prev, currentScreen.screenId));
-  }, [currentScreen.screenId]);
+  }, [hasActivatedUI, currentScreen.screenId]);
 
   // Drive the loop: when loopMode is active, step through ids one by one
-  // and have the avatar explain the current entry.
   useEffect(() => {
     if (!loopMode || loopMode.kind !== "timeline") return;
 
@@ -102,7 +87,6 @@ function App() {
     }
 
     if (index >= ids.length) {
-      // Finished the loop
       setLoopMode(null);
       return;
     }
@@ -112,7 +96,6 @@ function App() {
 
     let cancelled = false;
 
-    // Let the avatar explain the currently focused timeline entry
     (async () => {
       const timelineWidget = currentScreen.widgets.find(
         (w) => w.type === "timeline"
@@ -140,16 +123,13 @@ function App() {
       }
     })();
 
-    // Go to the next entry after a delay
     const handle = window.setTimeout(() => {
       setLoopMode((prev) => {
         if (!prev || prev.kind !== "timeline") return prev;
-        if (prev.index >= prev.ids.length - 1) {
-          return null; // finished
-        }
+        if (prev.index >= prev.ids.length - 1) return null;
         return { ...prev, index: prev.index + 1 };
       });
-    }, 8000); // ~8s per entry
+    }, 8000);
 
     return () => {
       cancelled = true;
@@ -163,17 +143,19 @@ function App() {
       alert("This will trigger a real CV download in a later version.");
       return;
     }
-
     console.log("Unhandled action:", actionId);
   };
 
-  // --- main command handler for the chat input ---
+  // --- main command handler for text input ---
   const handleCommand = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
 
     // Any new command cancels an active loop
     setLoopMode(null);
+
+    // First real command: wake up the UI and slide avatar left
+    if (!hasActivatedUI) setHasActivatedUI(true);
 
     const intent: Intent = parseIntent(trimmed);
     const current = currentScreen;
@@ -194,27 +176,21 @@ function App() {
           systemPrompt: "User navigated back to previous view.",
           session,
         });
-        if (avatar?.narration) {
-          setAvatarNarration(avatar.narration);
-        }
-        if (avatar?.focusTarget) {
-          setFocusTarget(avatar.focusTarget);
-        }
+        if (avatar?.narration) setAvatarNarration(avatar.narration);
+        if (avatar?.focusTarget) setFocusTarget(avatar.focusTarget);
       } finally {
         setAvatarThinking(false);
       }
       return;
     }
 
-    // SHOW_CV should always push the dedicated CV screen (dev + prod)
+    // SHOW_CV
     if (intent.type === "SHOW_CV") {
       const nextScreen = cvScreen;
       const newHistory = [...history, nextScreen];
 
       setHistory(newHistory);
-      setSystemPrompt(
-        "Showing CV overview. You can ask for details or another view."
-      );
+      setSystemPrompt("Showing CV overview. You can ask for details or another view.");
       setChatInput("");
       setFocusTarget(null);
 
@@ -224,20 +200,15 @@ function App() {
           systemPrompt: "User requested the CV view.",
           session,
         });
-        if (avatar?.narration) {
-          setAvatarNarration(avatar.narration);
-        }
-        if (avatar?.focusTarget) {
-          setFocusTarget(avatar.focusTarget);
-        }
+        if (avatar?.narration) setAvatarNarration(avatar.narration);
+        if (avatar?.focusTarget) setFocusTarget(avatar.focusTarget);
       } finally {
         setAvatarThinking(false);
       }
       return;
     }
 
-    // SHOW_PROJECTS / SHOW_ANY_PROJECTS:
-    // always handled by the local rule engine, even in prod
+    // SHOW_PROJECTS / SHOW_ANY_PROJECTS always local
     if (intent.type === "SHOW_PROJECTS" || intent.type === "SHOW_ANY_PROJECTS") {
       setAvatarThinking(true);
 
@@ -249,7 +220,7 @@ function App() {
 
       if (result.kind === "push") {
         nextScreen = result.screen;
-        newHistory = [...history, result.screen];
+        newHistory = [...history, nextScreen];
         setHistory(newHistory);
         compilerSystemPrompt = result.systemPrompt;
         if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
@@ -266,12 +237,8 @@ function App() {
           systemPrompt: compilerSystemPrompt,
           session,
         });
-        if (avatar?.narration) {
-          setAvatarNarration(avatar.narration);
-        }
-        if (avatar?.focusTarget) {
-          setFocusTarget(avatar.focusTarget);
-        }
+        if (avatar?.narration) setAvatarNarration(avatar.narration);
+        if (avatar?.focusTarget) setFocusTarget(avatar.focusTarget);
       } finally {
         setAvatarThinking(false);
       }
@@ -279,7 +246,7 @@ function App() {
       return;
     }
 
-    // LOOP_TIMELINE: automatic walkthrough of current timeline (no brain)
+    // LOOP_TIMELINE
     if (intent.type === "LOOP_TIMELINE") {
       const timelineWidget = current.widgets.find(
         (w) => w.type === "timeline"
@@ -297,9 +264,7 @@ function App() {
               "User requested a loop-through, but there is no timeline on this screen.",
             session,
           });
-          if (avatar?.narration) {
-            setAvatarNarration(avatar.narration);
-          }
+          if (avatar?.narration) setAvatarNarration(avatar.narration);
         } finally {
           setAvatarThinking(false);
         }
@@ -307,14 +272,9 @@ function App() {
       }
 
       const ids = timelineWidget.entries.map((e) => e.id);
-      setLoopMode({
-        kind: "timeline",
-        ids,
-        index: 0,
-      });
+      setLoopMode({ kind: "timeline", ids, index: 0 });
       setChatInput("");
 
-      // Intro explanation: what the loop is doing (one-time)
       setAvatarThinking(true);
       try {
         const avatar = await callAvatar(
@@ -327,9 +287,7 @@ function App() {
             session,
           }
         );
-        if (avatar?.narration) {
-          setAvatarNarration(avatar.narration);
-        }
+        if (avatar?.narration) setAvatarNarration(avatar.narration);
       } finally {
         setAvatarThinking(false);
       }
@@ -337,16 +295,14 @@ function App() {
       return;
     }
 
-    // from here on: compiler + avatar (mutations on current screen)
+    // compiler + avatar
     setAvatarThinking(true);
 
     let compilerSystemPrompt: string | undefined;
     let compilerMutations: ScreenMutation[] | undefined;
     let screenAfterCompiler: ScreenDescription = current;
 
-    // --- compiler path ---
     if (!IS_PROD) {
-      // local rule-based AI
       const result = decideFromText(trimmed, history);
 
       if (result.kind === "push") {
@@ -359,7 +315,6 @@ function App() {
         setSystemPrompt(result.systemPrompt);
       }
     } else {
-      // OpenAI brain
       const brain = await callBrain(trimmed, current, history);
 
       if (!brain) {
@@ -389,15 +344,12 @@ function App() {
         if (nextScreen !== current) {
           setHistory((prev) => [...prev, nextScreen]);
         }
-        if (brain.systemPrompt) {
-          setSystemPrompt(brain.systemPrompt);
-        }
+        if (brain.systemPrompt) setSystemPrompt(brain.systemPrompt);
       }
     }
 
     setChatInput("");
 
-    // --- avatar narration ---
     try {
       const avatar = await callAvatar(trimmed, screenAfterCompiler, history, {
         systemPrompt: compilerSystemPrompt,
@@ -405,12 +357,8 @@ function App() {
         session,
       });
 
-      if (avatar?.narration) {
-        setAvatarNarration(avatar.narration);
-      }
-      if (avatar?.focusTarget) {
-        setFocusTarget(avatar.focusTarget);
-      }
+      if (avatar?.narration) setAvatarNarration(avatar.narration);
+      if (avatar?.focusTarget) setFocusTarget(avatar.focusTarget);
     } finally {
       setAvatarThinking(false);
     }
@@ -421,17 +369,29 @@ function App() {
     void handleCommand(chatInput);
   };
 
+  // --- initial mode choice ---
+  const handleSelectText = () => {
+    setMode("text");
+    setShowChat(true);
+  };
+
+  const handleSelectVoice = () => {
+    setMode("voice");
+    setShowChat(false);
+    // voice pipeline comes later
+    if (!hasActivatedUI) {
+      // keep UI hidden until user actually speaks (later) or types a command
+      // so we do NOT setHasActivatedUI(true) here
+    }
+  };
+
   return (
-    <div className="app-shell">
-      {/* Avatar + talk button pinned on the left */}
+    <div className={`app-shell ${isIntro ? "app-intro" : "app-active"}`}>
+      {/* Avatar + controls column */}
       <div className="avatar-column">
         <div className="avatar-panel">
           <div className="avatar-header">
-            <span
-              className="avatar-icon"
-              role="img"
-              aria-label="Interface avatar"
-            >
+            <span className="avatar-icon" role="img" aria-label="Interface avatar">
               🤖
             </span>
             <div>
@@ -447,91 +407,113 @@ function App() {
           <div className="avatar-body">
             {avatarNarration ?? (
               <span>
-                I am the Conversationally-Driven UI (CDUI) avatar. Tell me what
-                you want to see, and I’ll help this interface adapt.
+                I am the Conversationally-Driven UI (CDUI) avatar. Tell me what you want to
+                see, and I’ll help this interface adapt.
               </span>
             )}
           </div>
         </div>
 
-        {/* Persona style toggle */}
-        <div className="avatar-persona">
-          <span className="avatar-persona-label">Avatar style</span>
-          <div className="avatar-persona-buttons">
-            <button
-              type="button"
-              className={`avatar-persona-button ${
-                personaPref === "balanced" ? "is-active" : ""
-              }`}
-              onClick={() => handlePersonaChange("balanced")}
-            >
-              Balanced
+        {/* INTRO: only before any command */}
+        {isIntro ? (
+          <div className="avatar-mode-chooser">
+            <button type="button" className="avatar-mode-button" onClick={handleSelectVoice}>
+              🎙️ Talk to me
             </button>
-            <button
-              type="button"
-              className={`avatar-persona-button ${
-                personaPref === "concise" ? "is-active" : ""
-              }`}
-              onClick={() => handlePersonaChange("concise")}
-            >
-              Concise
-            </button>
-            <button
-              type="button"
-              className={`avatar-persona-button ${
-                personaPref === "detailed" ? "is-active" : ""
-              }`}
-              onClick={() => handlePersonaChange("detailed")}
-            >
-              Detailed
+            <button type="button" className="avatar-mode-button" onClick={handleSelectText}>
+              ✍️ Write to me
             </button>
           </div>
-        </div>
+        ) : (
+          <>
+            {/* Persona style toggle (only after UI is active) */}
+            <div className="avatar-persona">
+              <span className="avatar-persona-label">Avatar style</span>
+              <div className="avatar-persona-buttons">
+                <button
+                  type="button"
+                  className={`avatar-persona-button ${personaPref === "balanced" ? "is-active" : ""}`}
+                  onClick={() => handlePersonaChange("balanced")}
+                >
+                  Balanced
+                </button>
+                <button
+                  type="button"
+                  className={`avatar-persona-button ${personaPref === "concise" ? "is-active" : ""}`}
+                  onClick={() => handlePersonaChange("concise")}
+                >
+                  Concise
+                </button>
+                <button
+                  type="button"
+                  className={`avatar-persona-button ${personaPref === "detailed" ? "is-active" : ""}`}
+                  onClick={() => handlePersonaChange("detailed")}
+                >
+                  Detailed
+                </button>
+              </div>
+            </div>
 
-        {/* Voice toggle */}
-        <div className="avatar-voice-toggle">
-          <button
-            type="button"
-            className={`avatar-voice-button ${
-              session.voiceEnabled ? "is-on" : ""
-            }`}
-            onClick={() =>
-              setSession((prev) =>
-                setVoicePreference(prev, !prev.voiceEnabled)
-              )
-            }
-          >
-            {session.voiceEnabled ? "🔊 Voice: on" : "🔈 Voice: off"}
-          </button>
-        </div>
+            {/* Mode switcher: show opposite mode */}
+            <div className="avatar-mode-switcher">
+              {mode === "voice" ? (
+                <button
+                  type="button"
+                  className="avatar-mode-switcher-button"
+                  onClick={() => {
+                    setMode("text");
+                    setShowChat(true);
+                  }}
+                >
+                  Switch to writing instead
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="avatar-mode-switcher-button"
+                  onClick={() => {
+                    setMode("voice");
+                    setShowChat(false);
+                  }}
+                >
+                  Switch to talking instead
+                </button>
+              )}
+            </div>
 
-        {/* TALK BUTTON UNDER THE AVATAR CARD */}
-        <div className="avatar-talk-wrapper">
-          <button
-            type="button"
-            className="avatar-talk-button"
-            onClick={() => setShowChat(true)}
-          >
-            Talk to the interface
-          </button>
-        </div>
+            {/* Re-open chat in text mode */}
+            {mode === "text" && (
+              <div className="avatar-talk-wrapper">
+                <button
+                  type="button"
+                  className="avatar-talk-button"
+                  onClick={() => setShowChat(true)}
+                >
+                  Talk to the interface
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
-      {/* Main UI region (right side) */}
-      <div className="ui-region">
-        <div className="ui-fullscreen">
-          <ScreenRenderer
-            screen={currentScreen}
-            onAction={handleAction}
-            focusTarget={focusTarget}
-          />
+      {/* Main UI region (right side) – only after first real command */}
+      {hasActivatedUI && (
+        <div className="ui-region">
+          <div className="ui-fullscreen">
+            <ScreenRenderer
+              screen={currentScreen}
+              onAction={handleAction}
+              focusTarget={focusTarget}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Chat dock at the bottom */}
+      {/* Chat dock (text mode only) */}
       <div
         className={`chat-dock ${
-          showChat ? "chat-dock-visible" : "chat-dock-hidden"
+          showChat && mode === "text" ? "chat-dock-visible" : "chat-dock-hidden"
         }`}
       >
         <div className="chat-box">
