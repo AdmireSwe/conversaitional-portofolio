@@ -89,14 +89,16 @@ function App() {
       onStatus: setVoiceStatus,
       onEvent: (evt) => {
         // Optional: surface transcripts / state as “narration”
-        // Realtime GA uses response.output_audio_transcript.delta events for transcript deltas
+        // Realtime uses response.output_audio_transcript.delta events for transcript deltas
         if (
           evt?.type === "response.output_audio_transcript.delta" &&
           typeof evt.delta === "string"
         ) {
           setAvatarNarration((prev) => (prev ? prev + evt.delta : evt.delta));
         }
-        // You can also listen for: response.output_audio_transcript.done, etc.
+
+        // Useful for debugging:
+        // if (evt?.type) console.log("[realtime evt]", evt.type, evt);
       },
     });
     return client;
@@ -131,14 +133,31 @@ function App() {
 
       await voiceClient.connect(data.clientSecret);
 
-      // Optional: set default behavior (turn-taking / style) after connect
-      // voiceClient.sendEvent({
-      //   type: "session.update",
-      //   session: {
-      //     type: "realtime",
-      //     instructions: "Speak naturally. Ask short clarifying questions.",
-      //   },
-      // });
+      // ✅ CRITICAL: Realtime will NOT speak unless you tell it to.
+      // 1) Configure the session (turn detection + modalities + instructions)
+      voiceClient.sendEvent({
+        type: "session.update",
+        session: {
+          // Keep both modalities so you can later show text transcripts too
+          modalities: ["audio", "text"],
+          // Server-side VAD: the server detects when the user stops speaking
+          turn_detection: {
+            type: "server_vad",
+          },
+          instructions:
+            "You are the Conversationally-Driven UI (CDUI) avatar for Admir’s portfolio. Speak naturally, like a real person. Be proactive: briefly explain what the visitor can do, then wait for them. Ask short clarifying questions when needed.",
+        },
+      });
+
+      // 2) Force a first spoken response (otherwise it may remain silent)
+      voiceClient.sendEvent({
+        type: "response.create",
+        response: {
+          modalities: ["audio"],
+          instructions:
+            "Greet the visitor in a friendly way and tell them they can talk to explore Admir’s projects or ask for the CV.",
+        },
+      });
     } catch (e: any) {
       setVoiceError(String(e?.message ?? e));
       setVoiceStatus("error");
