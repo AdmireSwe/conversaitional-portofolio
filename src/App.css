@@ -731,3 +731,34 @@ ul {
   border-color: #4f46e5;
   color: white;
 }
+
+.avatar-voice-toggle {
+  margin-top: 0.5rem;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.avatar-voice-button {
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: background 0.12s ease-out, box-shadow 0.12s ease-out,
+    transform 0.12s ease-out, border-color 0.12s ease-out;
+}
+
+.avatar-voice-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+}
+
+.avatar-voice-button.is-on {
+  background: #111827;
+  color: #ffffff;
+  border-color: #111827;
+}

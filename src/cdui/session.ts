@@ -7,6 +7,7 @@ export interface SessionContext {
   screensViewed: Record<string, number>;
   lastFocus: string | null;
   personaHints: string[];
+  voiceEnabled: boolean;
 }
 
 export type PersonaPreference = "balanced" | "concise" | "detailed";
@@ -28,6 +29,7 @@ function freshSession(): SessionContext {
     screensViewed: {},
     lastFocus: null,
     personaHints: [],
+    voiceEnabled: false, // default: voice off
   };
 }
 
@@ -55,6 +57,7 @@ export function loadSession(): SessionContext {
       screensViewed: stored.screensViewed ?? {},
       lastFocus: stored.lastFocus ?? null,
       personaHints: stored.personaHints ?? [],
+      voiceEnabled: stored.voiceEnabled === true, // 👈 restore saved preference
     };
 
     saveSession(normalized);
@@ -123,6 +126,23 @@ export function setPersonaPreference(
   const updated: SessionContext = {
     ...ctx,
     personaHints: newHints,
+    lastVisit: Date.now(),
+  };
+
+  saveSession(updated);
+  return updated;
+}
+
+/**
+ * Enable / disable voice narration preference.
+ */
+export function setVoicePreference(
+  ctx: SessionContext,
+  enabled: boolean
+): SessionContext {
+  const updated: SessionContext = {
+    ...ctx,
+    voiceEnabled: enabled,
     lastVisit: Date.now(),
   };
 

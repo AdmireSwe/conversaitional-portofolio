@@ -5,6 +5,7 @@ import {
   getPersonaPreference,
   setPersonaPreference,
   type PersonaPreference,
+  setVoicePreference, // 👈 NEW
 } from "./cdui/session";
 
 import React, { useState, useEffect } from "react";
@@ -62,6 +63,28 @@ function App() {
     setSession((prev) => setPersonaPreference(prev, pref));
   };
 
+  // --- voice: speak avatar narration if enabled ---
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // If voice is off, cancel any ongoing speech
+    if (!session.voiceEnabled) {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      return;
+    }
+
+    if (!avatarNarration) return;
+    if (!("speechSynthesis" in window)) return;
+
+    const utterance = new SpeechSynthesisUtterance(avatarNarration);
+
+    // Cancel previous utterances so we don't overlap
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  }, [avatarNarration, session.voiceEnabled]);
+
   // Mark every visited screen in the session
   useEffect(() => {
     setSession((prev) => markScreen(prev, currentScreen.screenId));
@@ -91,7 +114,6 @@ function App() {
 
     // Let the avatar explain the currently focused timeline entry
     (async () => {
-      // Find the timeline and this specific entry for a better prompt
       const timelineWidget = currentScreen.widgets.find(
         (w) => w.type === "timeline"
       ) as TimelineWidget | undefined;
@@ -107,14 +129,13 @@ function App() {
         const avatar = await callAvatar(userMessage, currentScreen, history, {
           systemPrompt:
             "The UI is automatically looping through timeline entries; describe the currently highlighted one in 2–3 sentences.",
-          session, // 👈 pass session
+          session,
         });
 
         if (!cancelled && avatar?.narration) {
           setAvatarNarration(avatar.narration);
         }
       } finally {
-        // Always stop the spinner for this step, even if cancelled
         setAvatarThinking(false);
       }
     })();
@@ -128,7 +149,7 @@ function App() {
         }
         return { ...prev, index: prev.index + 1 };
       });
-    }, 8000); // ~8s per entry so there’s time to read
+    }, 8000); // ~8s per entry
 
     return () => {
       cancelled = true;
@@ -228,7 +249,7 @@ function App() {
 
       if (result.kind === "push") {
         nextScreen = result.screen;
-        newHistory = [...history, nextScreen];
+        newHistory = [...history, result.screen];
         setHistory(newHistory);
         compilerSystemPrompt = result.systemPrompt;
         if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
@@ -381,7 +402,7 @@ function App() {
       const avatar = await callAvatar(trimmed, screenAfterCompiler, history, {
         systemPrompt: compilerSystemPrompt,
         mutations: compilerMutations,
-        session, // 👈 important: pass session here too
+        session,
       });
 
       if (avatar?.narration) {
@@ -465,6 +486,23 @@ function App() {
               Detailed
             </button>
           </div>
+        </div>
+
+        {/* Voice toggle */}
+        <div className="avatar-voice-toggle">
+          <button
+            type="button"
+            className={`avatar-voice-button ${
+              session.voiceEnabled ? "is-on" : ""
+            }`}
+            onClick={() =>
+              setSession((prev) =>
+                setVoicePreference(prev, !prev.voiceEnabled)
+              )
+            }
+          >
+            {session.voiceEnabled ? "🔊 Voice: on" : "🔈 Voice: off"}
+          </button>
         </div>
 
         {/* TALK BUTTON UNDER THE AVATAR CARD */}
