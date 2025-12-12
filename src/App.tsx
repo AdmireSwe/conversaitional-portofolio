@@ -195,7 +195,7 @@ function App() {
       voiceClient.sendEvent({
         type: "response.create",
         response: {
-          modalities: ["audio", "text"],
+          output_modalities: ["audio", "text"],
           instructions:
             "Greet the visitor in one short sentence and ask what they want to see (CV, projects, timeline).",
         },
