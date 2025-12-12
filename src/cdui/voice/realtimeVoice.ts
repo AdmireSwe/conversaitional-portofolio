@@ -10,6 +10,13 @@ export class RealtimeVoiceClient {
   private micStream: MediaStream | null = null;
   private audioEl: HTMLAudioElement | null = null;
 
+  // 🔑 Queue events until data channel is open
+  private pendingEvents: any[] = [];
+  private dcReadyResolver: (() => void) | null = null;
+  private dcReady = new Promise<void>((resolve) => {
+    this.dcReadyResolver = resolve;
+  });
+
   status: RealtimeVoiceStatus = "idle";
   onStatus?: (s: RealtimeVoiceStatus) => void;
   onEvent?: RealtimeEventHandler;
@@ -27,33 +34,26 @@ export class RealtimeVoiceClient {
     this.onStatus?.(s);
   }
 
-  isConnected() {
-    return this.status === "connected" && !!this.pc;
-  }
-
   async connect(clientSecret: string) {
     if (this.pc) return;
 
     this.setStatus("connecting");
 
-    // 1) Setup peer connection
     this.pc = new RTCPeerConnection();
 
-    // Ensure audio negotiation is explicit
+    // Ensure we can receive audio
     try {
       this.pc.addTransceiver("audio", { direction: "sendrecv" });
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    // 2) Audio element for remote playback
+    // Audio element
     this.audioEl = document.createElement("audio");
     this.audioEl.autoplay = true;
+    this.audioEl.muted = false;
     this.audioEl.setAttribute("playsinline", "true");
     this.audioEl.style.display = "none";
     document.body.appendChild(this.audioEl);
 
-    // 3) Remote audio handling
     this.pc.ontrack = async (e) => {
       const [stream] = e.streams;
       if (stream && this.audioEl) {
@@ -61,23 +61,34 @@ export class RealtimeVoiceClient {
         try {
           await this.audioEl.play();
         } catch {
-          // Autoplay may be blocked until user gesture
+          // autoplay policy fallback handled in UI
         }
       }
     };
 
-    // 4) Data channel for events
+    // Data channel
     this.dc = this.pc.createDataChannel("oai-events");
+
+    this.dc.onopen = () => {
+      // ✅ Data channel ready
+      this.dcReadyResolver?.();
+      this.dcReadyResolver = null;
+
+      // Flush queued events
+      for (const evt of this.pendingEvents) {
+        this.dc!.send(JSON.stringify(evt));
+      }
+      this.pendingEvents = [];
+    };
+
     this.dc.onmessage = (m) => {
       try {
         const evt = JSON.parse(m.data);
         this.onEvent?.(evt);
-      } catch {
-        // ignore
-      }
+      } catch {}
     };
 
-    // 5) Microphone access
+    // Mic
     this.micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: true,
@@ -87,12 +98,10 @@ export class RealtimeVoiceClient {
       video: false,
     });
 
-    // 6) Send mic tracks
     for (const track of this.micStream.getTracks()) {
       this.pc.addTrack(track, this.micStream);
     }
 
-    // 7) Offer / answer exchange
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
 
@@ -107,8 +116,7 @@ export class RealtimeVoiceClient {
 
     if (!sdpResp.ok) {
       this.setStatus("error");
-      const text = await sdpResp.text().catch(() => "");
-      throw new Error(`Realtime SDP exchange failed: ${sdpResp.status} ${text}`);
+      throw new Error(`SDP exchange failed`);
     }
 
     const answerSdp = await sdpResp.text();
@@ -117,9 +125,16 @@ export class RealtimeVoiceClient {
     this.setStatus("connected");
   }
 
-  sendEvent(evt: any) {
-    if (!this.dc || this.dc.readyState !== "open") return;
-    this.dc.send(JSON.stringify(evt));
+  // ✅ SAFE: will wait until data channel is open
+  async sendEvent(evt: any) {
+    if (!this.dc) return;
+
+    if (this.dc.readyState === "open") {
+      this.dc.send(JSON.stringify(evt));
+    } else {
+      this.pendingEvents.push(evt);
+      await this.dcReady;
+    }
   }
 
   async disconnect() {
@@ -147,6 +162,7 @@ export class RealtimeVoiceClient {
       this.audioEl = null;
     }
 
+    this.pendingEvents = [];
     this.setStatus("idle");
   }
 }
