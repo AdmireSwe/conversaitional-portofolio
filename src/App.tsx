@@ -83,26 +83,84 @@ function App() {
 
   const voiceClientRef = useRef<RealtimeVoiceClient | null>(null);
 
+  // We'll store a ref to handleCommand so voice event handlers can call it safely.
+  const handleCommandRef = useRef<((text: string) => Promise<void>) | null>(null);
+
+  const lastVoiceCommandAtRef = useRef<number>(0);
+
   const voiceClient = useMemo(() => {
     // Create once per App lifecycle
     const client = new RealtimeVoiceClient({
       onStatus: setVoiceStatus,
       onEvent: (evt) => {
-        // Optional: surface transcripts / state as “narration”
-        // Realtime uses response.output_audio_transcript.delta events for transcript deltas
+        // IMPORTANT: log everything once you test, so we can match real event names.
+        // You can comment this out later.
+        // eslint-disable-next-line no-console
+        console.log("[realtime evt]", evt);
+
+        // --- 1) Show assistant transcript in the avatar bubble (optional) ---
         if (
           evt?.type === "response.output_audio_transcript.delta" &&
           typeof evt.delta === "string"
         ) {
           setAvatarNarration((prev) => (prev ? prev + evt.delta : evt.delta));
         }
+        if (
+          evt?.type === "response.output_audio_transcript.done" &&
+          typeof evt.transcript === "string"
+        ) {
+          setAvatarNarration(evt.transcript);
+        }
 
-        // Useful for debugging:
-        // if (evt?.type) console.log("[realtime evt]", evt.type, evt);
+        // --- 2) Drive the UI from user speech (THIS is what you want) ---
+        // Different deployments emit different event shapes/names.
+        // We'll catch the most common patterns and fall back to checking likely fields.
+
+        const now = Date.now();
+        const canTrigger =
+          mode === "voice" &&
+          !!handleCommandRef.current &&
+          now - lastVoiceCommandAtRef.current > 900; // debounce
+
+        // Candidate transcript extraction:
+        const candidateText =
+          (typeof evt?.transcript === "string" && evt.transcript) ||
+          (typeof evt?.text === "string" && evt.text) ||
+          (typeof evt?.delta === "string" &&
+            // some systems send user transcript deltas; ignore short fragments
+            evt.delta.length > 12
+            ? evt.delta
+            : null) ||
+          (typeof evt?.item?.content?.[0]?.transcript === "string" &&
+            evt.item.content[0].transcript) ||
+          null;
+
+        const isUserTranscriptEvent =
+          evt?.type?.includes("input_audio_transcription") ||
+          evt?.type?.includes("conversation.item") ||
+          evt?.type?.includes("input_audio") ||
+          evt?.type?.includes("user.transcript");
+
+        // Only trigger on "completed"/"done" style events, not deltas (to avoid spam)
+        const looksFinal =
+          evt?.type?.includes("completed") ||
+          evt?.type?.includes("done") ||
+          evt?.final === true;
+
+        if (canTrigger && isUserTranscriptEvent && looksFinal && candidateText) {
+          lastVoiceCommandAtRef.current = now;
+
+          // Mirror the recognized command briefly (helps debugging)
+          setSystemPrompt(`Heard: "${candidateText}"`);
+          if (handleCommandRef.current) {
+  void handleCommandRef.current(candidateText);
+}
+
+        }
       },
     });
     return client;
-  }, []);
+  }, [mode]);
 
   useEffect(() => {
     voiceClientRef.current = voiceClient;
@@ -117,7 +175,6 @@ function App() {
     setAvatarNarration(null);
 
     try {
-      // Get client secret from your server (keeps OPENAI_API_KEY off the client)
       const r = await fetch("/api/realtimeToken", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -133,29 +190,14 @@ function App() {
 
       await voiceClient.connect(data.clientSecret);
 
-      // ✅ CRITICAL: Realtime will NOT speak unless you tell it to.
-      // 1) Configure the session (turn detection + modalities + instructions)
-      voiceClient.sendEvent({
-        type: "session.update",
-        session: {
-          // Keep both modalities so you can later show text transcripts too
-          modalities: ["audio", "text"],
-          // Server-side VAD: the server detects when the user stops speaking
-          turn_detection: {
-            type: "server_vad",
-          },
-          instructions:
-            "You are the Conversationally-Driven UI (CDUI) avatar for Admir’s portfolio. Speak naturally, like a real person. Be proactive: briefly explain what the visitor can do, then wait for them. Ask short clarifying questions when needed.",
-        },
-      });
-
-      // 2) Force a first spoken response (otherwise it may remain silent)
+      // Force a greeting so you can *immediately* confirm audio works.
+      // If you hear this, output audio is working, and we can focus on input transcription wiring.
       voiceClient.sendEvent({
         type: "response.create",
         response: {
-          modalities: ["audio"],
+          modalities: ["audio", "text"],
           instructions:
-            "Greet the visitor in a friendly way and tell them they can talk to explore Admir’s projects or ask for the CV.",
+            "Greet the visitor in one short sentence and ask what they want to see (CV, projects, timeline).",
         },
       });
     } catch (e: any) {
@@ -174,7 +216,6 @@ function App() {
     if (mode !== "voice") {
       void stopVoice();
     }
-    // intentionally only depends on mode
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
@@ -183,8 +224,7 @@ function App() {
     setSession((prev) => markScreen(prev, currentScreen.screenId));
   }, [currentScreen.screenId]);
 
-  // Drive the loop: when loopMode is active, step through ids one by one
-  // and have the avatar explain the current entry.
+  // Drive the loop
   useEffect(() => {
     if (!loopMode || loopMode.kind !== "timeline") return;
 
@@ -247,7 +287,7 @@ function App() {
     };
   }, [loopMode, currentScreen, history, session]);
 
-  // --- button clicks from the CDUI screen (right column) ---
+  // --- button clicks from the CDUI screen ---
   const handleAction = (actionId: string) => {
     if (actionId === "download_cv") {
       alert("This will trigger a real CV download in a later version.");
@@ -263,7 +303,7 @@ function App() {
 
     setLoopMode(null);
 
-    // First real command: wake up the UI and slide avatar left
+    // First real command: wake up the UI
     if (!hasActivatedUI) {
       setHasActivatedUI(true);
     }
@@ -472,6 +512,11 @@ function App() {
     }
   };
 
+  // Keep the latest handleCommand in a ref for voice event handlers
+  useEffect(() => {
+    handleCommandRef.current = handleCommand;
+  }, [handleCommand]);
+
   const handleChatSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
     e.preventDefault();
     void handleCommand(chatInput);
@@ -483,7 +528,7 @@ function App() {
     setShowChat(true);
   };
 
-  // ✅ FIX: selecting voice should start voice immediately
+  // Selecting voice starts voice immediately
   const handleSelectVoice = () => {
     setMode("voice");
     setShowChat(false);
@@ -539,6 +584,14 @@ function App() {
               {voiceError && (
                 <div style={{ marginTop: "0.35rem", color: "#b91c1c" }}>
                   {voiceError}
+                </div>
+              )}
+
+              {/* If connected but silent: likely autoplay policy */}
+              {voiceStatus === "connected" && (
+                <div style={{ marginTop: "0.35rem", color: "#64748b" }}>
+                  If you hear nothing: check your system output device + Chrome
+                  site sound, then try once more.
                 </div>
               )}
             </div>
@@ -621,7 +674,6 @@ function App() {
                     setMode("voice");
                     setShowChat(false);
 
-                    // ✅ FIX: switching to voice should start voice immediately
                     if (!hasActivatedUI) setHasActivatedUI(true);
                     void startVoice();
                   }}
@@ -631,7 +683,7 @@ function App() {
               )}
             </div>
 
-            {/* Voice controls (real conversation) */}
+            {/* Voice controls */}
             {mode === "voice" && (
               <div className="avatar-talk-wrapper">
                 {voiceStatus !== "connected" ? (
@@ -639,7 +691,6 @@ function App() {
                     type="button"
                     className="avatar-talk-button"
                     onClick={() => {
-                      // Starting voice counts as “activation” because the user is now interacting
                       if (!hasActivatedUI) setHasActivatedUI(true);
                       void startVoice();
                     }}
@@ -674,7 +725,7 @@ function App() {
         )}
       </div>
 
-      {/* Main UI region (right side) – only after first real interaction */}
+      {/* Main UI region */}
       {hasActivatedUI && (
         <div className="ui-region">
           <div className="ui-fullscreen">

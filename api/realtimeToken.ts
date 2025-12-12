@@ -18,16 +18,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "Missing OPENAI_API_KEY env var" });
   }
 
-  // Ephemeral key session config (GA)
   const sessionConfig = {
     session: {
       type: "realtime",
-      model: "gpt-realtime",
+
+      // ✅ FIX: correct GA Realtime model
+      model: "gpt-4o-realtime-preview",
+
+      instructions:
+        "You are the Conversationally-Driven UI (CDUI) avatar for Admir’s portfolio. " +
+        "Speak naturally and conversationally. Greet the visitor briefly and ask what they want to see " +
+        "(CV, projects, timeline).",
+
       audio: {
         output: { voice: "marin" },
       },
-      instructions:
-        "You are the Conversationally-Driven UI (CDUI) avatar for Admir’s portfolio. Speak naturally and conversationally. Ask short clarifying questions when needed. You help the visitor navigate and reshape the interface.",
+
+      // ❗ Disabled for now to avoid ambiguity while testing
+      // turn_detection: {
+      //   type: "server_vad",
+      //   threshold: 0.5,
+      //   prefix_padding_ms: 300,
+      //   silence_duration_ms: 350,
+      //   create_response: true,
+      // },
     },
   };
 
@@ -50,7 +64,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // GA docs show the ephemeral key in `data.value` 
     const clientSecret = data?.value;
     if (!clientSecret || typeof clientSecret !== "string") {
       return res.status(500).json({
