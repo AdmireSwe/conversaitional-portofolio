@@ -37,7 +37,7 @@ body {
 
 .app-shell.app-active .ui-region {
   margin-left: 380px;            /* space for fixed avatar column */
-  width: calc(100% - 380px);     /* ✅ take all remaining width */
+  width: calc(100svw - 380px);     /* ✅ take all remaining width */
 }
 
 /* Screen container with subtle fade-in */

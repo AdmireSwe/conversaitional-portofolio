@@ -7,17 +7,26 @@ import {
   type PersonaPreference,
 } from "./cdui/session";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 
 import { ScreenRenderer } from "./cdui/components/ScreenRenderer";
-import type { ScreenDescription, ScreenMutation, TimelineWidget } from "./cdui/types";
+import type {
+  ScreenDescription,
+  ScreenMutation,
+  TimelineWidget,
+} from "./cdui/types";
 import { parseIntent, type Intent } from "./cdui/intent";
 import { homeScreen, cvScreen } from "./cdui/screens";
 import { decideFromText } from "./cdui/ai";
 import { callBrain } from "./cdui/brainClient";
 import { callAvatar } from "./cdui/avatarClient";
 import { applyMutation } from "./cdui/mutate";
+
+import {
+  RealtimeVoiceClient,
+  type RealtimeVoiceStatus,
+} from "./cdui/voice/realtimeVoice";
 
 const IS_PROD = import.meta.env.PROD;
 
@@ -45,11 +54,6 @@ function App() {
 
   const [avatarNarration, setAvatarNarration] = useState<string | null>(null);
   const [avatarThinking, setAvatarThinking] = useState(false);
-
-  // Interaction mode: before first choice we’re in "chooser"
-  const [mode, setMode] = useState<InteractionMode>("chooser");
-
-  // Chat dock only exists/works in text mode
   const [showChat, setShowChat] = useState(false);
 
   // Which UI element/section is currently in focus (for highlighting/scrolling)
@@ -57,6 +61,9 @@ function App() {
 
   // Loop mode for automatic walkthroughs (e.g. timeline slideshow)
   const [loopMode, setLoopMode] = useState<LoopMode>(null);
+
+  // Interaction mode: before first choice we’re in "chooser"
+  const [mode, setMode] = useState<InteractionMode>("chooser");
 
   // Has the UI "woken up" and slid left / rendered main screen?
   const [hasActivatedUI, setHasActivatedUI] = useState(false);
@@ -70,13 +77,95 @@ function App() {
 
   const isIntro = !hasActivatedUI;
 
-  // Mark screen views only after UI is activated (avoids counting intro idle time)
+  // --- voice (realtime) state ---
+  const [voiceStatus, setVoiceStatus] = useState<RealtimeVoiceStatus>("idle");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+
+  const voiceClientRef = useRef<RealtimeVoiceClient | null>(null);
+
+  const voiceClient = useMemo(() => {
+    // Create once per App lifecycle
+    const client = new RealtimeVoiceClient({
+      onStatus: setVoiceStatus,
+      onEvent: (evt) => {
+        // Optional: surface transcripts / state as “narration”
+        // Realtime GA uses response.output_audio_transcript.delta events for transcript deltas
+        if (
+          evt?.type === "response.output_audio_transcript.delta" &&
+          typeof evt.delta === "string"
+        ) {
+          setAvatarNarration((prev) => (prev ? prev + evt.delta : evt.delta));
+        }
+        // You can also listen for: response.output_audio_transcript.done, etc.
+      },
+    });
+    return client;
+  }, []);
+
   useEffect(() => {
-    if (!hasActivatedUI) return;
+    voiceClientRef.current = voiceClient;
+    return () => {
+      void voiceClient.disconnect();
+      voiceClientRef.current = null;
+    };
+  }, [voiceClient]);
+
+  async function startVoice() {
+    setVoiceError(null);
+    setAvatarNarration(null);
+
+    try {
+      // Get client secret from your server (keeps OPENAI_API_KEY off the client)
+      const r = await fetch("/api/realtimeToken", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      const data = await r.json();
+      if (!r.ok || !data?.clientSecret) {
+        throw new Error(
+          `Failed to fetch realtime token: ${r.status} ${JSON.stringify(data)}`
+        );
+      }
+
+      await voiceClient.connect(data.clientSecret);
+
+      // Optional: set default behavior (turn-taking / style) after connect
+      // voiceClient.sendEvent({
+      //   type: "session.update",
+      //   session: {
+      //     type: "realtime",
+      //     instructions: "Speak naturally. Ask short clarifying questions.",
+      //   },
+      // });
+    } catch (e: any) {
+      setVoiceError(String(e?.message ?? e));
+      setVoiceStatus("error");
+    }
+  }
+
+  async function stopVoice() {
+    setVoiceError(null);
+    await voiceClient.disconnect();
+  }
+
+  // ✅ SAFETY: if we leave voice mode, ensure we disconnect
+  useEffect(() => {
+    if (mode !== "voice") {
+      void stopVoice();
+    }
+    // intentionally only depends on mode
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
+  // Mark every visited screen in the session
+  useEffect(() => {
     setSession((prev) => markScreen(prev, currentScreen.screenId));
-  }, [hasActivatedUI, currentScreen.screenId]);
+  }, [currentScreen.screenId]);
 
   // Drive the loop: when loopMode is active, step through ids one by one
+  // and have the avatar explain the current entry.
   useEffect(() => {
     if (!loopMode || loopMode.kind !== "timeline") return;
 
@@ -126,7 +215,9 @@ function App() {
     const handle = window.setTimeout(() => {
       setLoopMode((prev) => {
         if (!prev || prev.kind !== "timeline") return prev;
-        if (prev.index >= prev.ids.length - 1) return null;
+        if (prev.index >= prev.ids.length - 1) {
+          return null;
+        }
         return { ...prev, index: prev.index + 1 };
       });
     }, 8000);
@@ -146,21 +237,21 @@ function App() {
     console.log("Unhandled action:", actionId);
   };
 
-  // --- main command handler for text input ---
+  // --- main command handler for the chat input ---
   const handleCommand = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
 
-    // Any new command cancels an active loop
     setLoopMode(null);
 
     // First real command: wake up the UI and slide avatar left
-    if (!hasActivatedUI) setHasActivatedUI(true);
+    if (!hasActivatedUI) {
+      setHasActivatedUI(true);
+    }
 
     const intent: Intent = parseIntent(trimmed);
     const current = currentScreen;
 
-    // GO BACK locally
     if (intent.type === "GO_BACK") {
       const prevHistory =
         history.length > 1 ? history.slice(0, history.length - 1) : history;
@@ -184,13 +275,14 @@ function App() {
       return;
     }
 
-    // SHOW_CV
     if (intent.type === "SHOW_CV") {
       const nextScreen = cvScreen;
       const newHistory = [...history, nextScreen];
 
       setHistory(newHistory);
-      setSystemPrompt("Showing CV overview. You can ask for details or another view.");
+      setSystemPrompt(
+        "Showing CV overview. You can ask for details or another view."
+      );
       setChatInput("");
       setFocusTarget(null);
 
@@ -208,7 +300,6 @@ function App() {
       return;
     }
 
-    // SHOW_PROJECTS / SHOW_ANY_PROJECTS always local
     if (intent.type === "SHOW_PROJECTS" || intent.type === "SHOW_ANY_PROJECTS") {
       setAvatarThinking(true);
 
@@ -220,7 +311,7 @@ function App() {
 
       if (result.kind === "push") {
         nextScreen = result.screen;
-        newHistory = [...history, nextScreen];
+        newHistory = [...history, result.screen];
         setHistory(newHistory);
         compilerSystemPrompt = result.systemPrompt;
         if (result.systemPrompt) setSystemPrompt(result.systemPrompt);
@@ -246,7 +337,6 @@ function App() {
       return;
     }
 
-    // LOOP_TIMELINE
     if (intent.type === "LOOP_TIMELINE") {
       const timelineWidget = current.widgets.find(
         (w) => w.type === "timeline"
@@ -295,7 +385,6 @@ function App() {
       return;
     }
 
-    // compiler + avatar
     setAvatarThinking(true);
 
     let compilerSystemPrompt: string | undefined;
@@ -369,20 +458,19 @@ function App() {
     void handleCommand(chatInput);
   };
 
-  // --- initial mode choice ---
+  // --- handlers for the initial mode choice ---
   const handleSelectText = () => {
     setMode("text");
     setShowChat(true);
   };
 
+  // ✅ FIX: selecting voice should start voice immediately
   const handleSelectVoice = () => {
     setMode("voice");
     setShowChat(false);
-    // voice pipeline comes later
-    if (!hasActivatedUI) {
-      // keep UI hidden until user actually speaks (later) or types a command
-      // so we do NOT setHasActivatedUI(true) here
-    }
+
+    if (!hasActivatedUI) setHasActivatedUI(true);
+    void startVoice();
   };
 
   return (
@@ -391,7 +479,11 @@ function App() {
       <div className="avatar-column">
         <div className="avatar-panel">
           <div className="avatar-header">
-            <span className="avatar-icon" role="img" aria-label="Interface avatar">
+            <span
+              className="avatar-icon"
+              role="img"
+              aria-label="Interface avatar"
+            >
               🤖
             </span>
             <div>
@@ -407,46 +499,80 @@ function App() {
           <div className="avatar-body">
             {avatarNarration ?? (
               <span>
-                I am the Conversationally-Driven UI (CDUI) avatar. Tell me what you want to
-                see, and I’ll help this interface adapt.
+                I am the Conversationally-Driven UI (CDUI) avatar. Tell me what
+                you want to see, and I’ll help this interface adapt.
               </span>
             )}
           </div>
+
+          {/* Voice status (only when in voice mode, to avoid clutter) */}
+          {!isIntro && mode === "voice" && (
+            <div
+              style={{
+                marginTop: "0.75rem",
+                fontSize: "0.85rem",
+                color: "#334155",
+              }}
+            >
+              <div>
+                <strong>Voice:</strong> {voiceStatus}
+              </div>
+              {voiceError && (
+                <div style={{ marginTop: "0.35rem", color: "#b91c1c" }}>
+                  {voiceError}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* INTRO: only before any command */}
+        {/* INTRO chooser */}
         {isIntro ? (
           <div className="avatar-mode-chooser">
-            <button type="button" className="avatar-mode-button" onClick={handleSelectVoice}>
+            <button
+              type="button"
+              className="avatar-mode-button"
+              onClick={handleSelectVoice}
+            >
               🎙️ Talk to me
             </button>
-            <button type="button" className="avatar-mode-button" onClick={handleSelectText}>
+            <button
+              type="button"
+              className="avatar-mode-button"
+              onClick={handleSelectText}
+            >
               ✍️ Write to me
             </button>
           </div>
         ) : (
           <>
-            {/* Persona style toggle (only after UI is active) */}
+            {/* Persona style toggle */}
             <div className="avatar-persona">
               <span className="avatar-persona-label">Avatar style</span>
               <div className="avatar-persona-buttons">
                 <button
                   type="button"
-                  className={`avatar-persona-button ${personaPref === "balanced" ? "is-active" : ""}`}
+                  className={`avatar-persona-button ${
+                    personaPref === "balanced" ? "is-active" : ""
+                  }`}
                   onClick={() => handlePersonaChange("balanced")}
                 >
                   Balanced
                 </button>
                 <button
                   type="button"
-                  className={`avatar-persona-button ${personaPref === "concise" ? "is-active" : ""}`}
+                  className={`avatar-persona-button ${
+                    personaPref === "concise" ? "is-active" : ""
+                  }`}
                   onClick={() => handlePersonaChange("concise")}
                 >
                   Concise
                 </button>
                 <button
                   type="button"
-                  className={`avatar-persona-button ${personaPref === "detailed" ? "is-active" : ""}`}
+                  className={`avatar-persona-button ${
+                    personaPref === "detailed" ? "is-active" : ""
+                  }`}
                   onClick={() => handlePersonaChange("detailed")}
                 >
                   Detailed
@@ -454,7 +580,7 @@ function App() {
               </div>
             </div>
 
-            {/* Mode switcher: show opposite mode */}
+            {/* Mode switcher: show opposite */}
             <div className="avatar-mode-switcher">
               {mode === "voice" ? (
                 <button
@@ -463,9 +589,10 @@ function App() {
                   onClick={() => {
                     setMode("text");
                     setShowChat(true);
+                    void stopVoice();
                   }}
                 >
-                  Switch to writing instead
+                  Switch to typing instead
                 </button>
               ) : (
                 <button
@@ -474,6 +601,10 @@ function App() {
                   onClick={() => {
                     setMode("voice");
                     setShowChat(false);
+
+                    // ✅ FIX: switching to voice should start voice immediately
+                    if (!hasActivatedUI) setHasActivatedUI(true);
+                    void startVoice();
                   }}
                 >
                   Switch to talking instead
@@ -481,7 +612,34 @@ function App() {
               )}
             </div>
 
-            {/* Re-open chat in text mode */}
+            {/* Voice controls (real conversation) */}
+            {mode === "voice" && (
+              <div className="avatar-talk-wrapper">
+                {voiceStatus !== "connected" ? (
+                  <button
+                    type="button"
+                    className="avatar-talk-button"
+                    onClick={() => {
+                      // Starting voice counts as “activation” because the user is now interacting
+                      if (!hasActivatedUI) setHasActivatedUI(true);
+                      void startVoice();
+                    }}
+                  >
+                    Start voice conversation
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="avatar-talk-button"
+                    onClick={() => void stopVoice()}
+                  >
+                    Stop voice conversation
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Text talk button only in text mode */}
             {mode === "text" && (
               <div className="avatar-talk-wrapper">
                 <button
@@ -497,7 +655,7 @@ function App() {
         )}
       </div>
 
-      {/* Main UI region (right side) – only after first real command */}
+      {/* Main UI region (right side) – only after first real interaction */}
       {hasActivatedUI && (
         <div className="ui-region">
           <div className="ui-fullscreen">
