@@ -84,8 +84,9 @@ function App() {
   const voiceClientRef = useRef<RealtimeVoiceClient | null>(null);
 
   // We'll store a ref to handleCommand so voice event handlers can call it safely.
-  const handleCommandRef = useRef<((text: string) => Promise<void>) | null>(null);
-
+  const handleCommandRef = useRef<((text: string) => Promise<void>) | null>(
+    null
+  );
   const lastVoiceCommandAtRef = useRef<number>(0);
 
   const voiceClient = useMemo(() => {
@@ -93,8 +94,6 @@ function App() {
     const client = new RealtimeVoiceClient({
       onStatus: setVoiceStatus,
       onEvent: (evt) => {
-        // IMPORTANT: log everything once you test, so we can match real event names.
-        // You can comment this out later.
         // eslint-disable-next-line no-console
         console.log("[realtime evt]", evt);
 
@@ -112,53 +111,48 @@ function App() {
           setAvatarNarration(evt.transcript);
         }
 
-        // --- 2) Drive the UI from user speech (THIS is what you want) ---
-        // Different deployments emit different event shapes/names.
-        // We'll catch the most common patterns and fall back to checking likely fields.
-
+        // --- 2) Drive the UI from user speech ---
         const now = Date.now();
         const canTrigger =
           mode === "voice" &&
           !!handleCommandRef.current &&
           now - lastVoiceCommandAtRef.current > 900; // debounce
 
-        // Candidate transcript extraction:
-        const candidateText =
+        // Candidate transcript extraction (best-effort, backend/event-shape dependent)
+        const candidateText: string | null =
           (typeof evt?.transcript === "string" && evt.transcript) ||
           (typeof evt?.text === "string" && evt.text) ||
-          (typeof evt?.delta === "string" &&
-            // some systems send user transcript deltas; ignore short fragments
-            evt.delta.length > 12
-            ? evt.delta
-            : null) ||
           (typeof evt?.item?.content?.[0]?.transcript === "string" &&
             evt.item.content[0].transcript) ||
           null;
 
+        const evtType = typeof evt?.type === "string" ? evt.type : "";
+
         const isUserTranscriptEvent =
-          evt?.type?.includes("input_audio_transcription") ||
-          evt?.type?.includes("conversation.item") ||
-          evt?.type?.includes("input_audio") ||
-          evt?.type?.includes("user.transcript");
+          evtType.includes("input_audio_transcription") ||
+          evtType.includes("conversation.item") ||
+          evtType.includes("input_audio") ||
+          evtType.includes("user.transcript");
 
-        // Only trigger on "completed"/"done" style events, not deltas (to avoid spam)
+        // Only trigger on "completed"/"done" style events (avoid deltas spam)
         const looksFinal =
-          evt?.type?.includes("completed") ||
-          evt?.type?.includes("done") ||
-          evt?.final === true;
+          evtType.includes("completed") || evtType.includes("done") || evt?.final === true;
 
-        if (canTrigger && isUserTranscriptEvent && looksFinal && candidateText) {
+        if (
+          canTrigger &&
+          isUserTranscriptEvent &&
+          looksFinal &&
+          candidateText &&
+          candidateText.trim().length > 0
+        ) {
           lastVoiceCommandAtRef.current = now;
 
-          // Mirror the recognized command briefly (helps debugging)
           setSystemPrompt(`Heard: "${candidateText}"`);
-          if (handleCommandRef.current) {
-  void handleCommandRef.current(candidateText);
-}
-
+          void handleCommandRef.current?.(candidateText);
         }
       },
     });
+
     return client;
   }, [mode]);
 
@@ -190,16 +184,16 @@ function App() {
 
       await voiceClient.connect(data.clientSecret);
 
-      // Force a greeting so you can *immediately* confirm audio works.
-      // If you hear this, output audio is working, and we can focus on input transcription wiring.
+      // Force a greeting so you can immediately confirm audio works.
       voiceClient.sendEvent({
-  type: "response.create",
-  response: {
-    instructions:
-      "Greet the visitor in one short sentence and ask what they want to see, such as their CV or projects.",
-  },
-});
-
+        type: "response.create",
+        response: {
+          // ✅ match server constraint: ONE output modality
+          output_modalities: ["audio"],
+          instructions:
+            "Greet the visitor in one short sentence and ask what they want to see, such as their CV or projects.",
+        },
+      });
     } catch (e: any) {
       setVoiceError(String(e?.message ?? e));
       setVoiceStatus("error");
@@ -543,11 +537,7 @@ function App() {
       <div className="avatar-column">
         <div className="avatar-panel">
           <div className="avatar-header">
-            <span
-              className="avatar-icon"
-              role="img"
-              aria-label="Interface avatar"
-            >
+            <span className="avatar-icon" role="img" aria-label="Interface avatar">
               🤖
             </span>
             <div>

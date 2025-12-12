@@ -1,4 +1,6 @@
 // api/realtimeToken.ts
+// Creates a client-safe ephemeral token for OpenAI Realtime (speech-to-speech)
+
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 export const config = {
@@ -16,26 +18,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "Missing OPENAI_API_KEY env var" });
   }
 
-  /**
-   * IMPORTANT:
-   * - Realtime GA supports ONE modality per session
-   * - We choose AUDIO ONLY
-   * - Text is handled locally via transcript events
-   */
   const sessionConfig = {
     session: {
       type: "realtime",
       model: "gpt-realtime",
+
+      // ✅ IMPORTANT: your backend currently only supports ONE output modality
+      // ["audio"] OR ["text"] — not both.
+      output_modalities: ["audio"],
+
       instructions:
-        "You are the CDUI avatar. Speak naturally. Keep responses short.",
+        "You are the Conversationally-Driven UI (CDUI) avatar for Admir’s portfolio. " +
+        "Speak naturally and conversationally. Ask short clarifying questions when needed. " +
+        "If the user asks to see something (CV, projects, timeline), respond briefly and clearly.",
+
       audio: {
         output: { voice: "marin" },
-      },
-      turn_detection: {
-        type: "server_vad",
-        threshold: 0.5,
-        silence_duration_ms: 400,
-        create_response: true,
+
+        // ⚠️ Keep this if your backend accepts it. If it errors again, we’ll remove/adjust.
+        input: {
+          // If transcription config causes another 400, remove this block first.
+          transcription: {
+            model: "gpt-4o-mini-transcribe",
+            language: "en",
+          },
+
+          turn_detection: {
+            type: "server_vad",
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 500,
+            create_response: true,
+          },
+        },
       },
     },
   };
@@ -50,20 +65,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify(sessionConfig),
     });
 
-    const data = await r.json();
+    const data = (await r.json().catch(() => null)) as any;
 
     if (!r.ok) {
       return res.status(r.status).json({
         error: "Failed to create client secret",
-        details: data,
+        details: data ?? null,
       });
     }
 
-    return res.status(200).json({ clientSecret: data.value });
+    const clientSecret = data?.value;
+    if (!clientSecret || typeof clientSecret !== "string") {
+      return res.status(500).json({
+        error: "Unexpected response shape from OpenAI",
+        details: data ?? null,
+      });
+    }
+
+    return res.status(200).json({ clientSecret });
   } catch (err: any) {
-    return res.status(500).json({
-      error: "Unexpected error",
-      details: String(err),
-    });
+    return res
+      .status(500)
+      .json({ error: "Unexpected error", details: String(err) });
   }
 }
