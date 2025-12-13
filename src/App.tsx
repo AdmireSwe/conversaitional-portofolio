@@ -744,16 +744,18 @@ function App() {
         )}
       </div>
 
-      {/* Main UI region – always rendered */}
-      <div className="ui-region">
-        <div className="ui-fullscreen">
-          <ScreenRenderer
-            screen={currentScreen}
-            onAction={handleAction}
-            focusTarget={focusTarget}
-          />
+      {/* ✅ Main UI region – render ONLY after activation (prevents intro mixing) */}
+      {!isIntro && (
+        <div className="ui-region">
+          <div className="ui-fullscreen">
+            <ScreenRenderer
+              screen={currentScreen}
+              onAction={handleAction}
+              focusTarget={focusTarget}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Chat dock (text mode only) */}
       <div

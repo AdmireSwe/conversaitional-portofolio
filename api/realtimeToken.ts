@@ -21,6 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const model =
     process.env.OPENAI_REALTIME_MODEL?.trim() || "gpt-realtime-2025-08-28";
 
+  // ✅ IMPORTANT: transcription + turn detection are under audio.input.*
   const sessionConfig = {
     session: {
       type: "realtime",
@@ -37,24 +38,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         "If the user says 'stop', immediately stop speaking.",
 
       audio: {
-        output: { voice: "marin" },
-      },
+        input: {
+          // ✅ correct location for transcription
+          transcription: {
+            model: "gpt-4o-mini-transcribe",
+          },
 
-      // IMPORTANT: to reliably get user transcript events
-      // (If this is unsupported in your account/model, OpenAI will reject the config—
-      // but in most setups this is what you want.)
-      input_audio_transcription: {
-        model: "gpt-4o-mini-transcribe",
-      },
+          // ✅ correct location for turn detection
+          turn_detection: {
+            type: "server_vad",
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 350,
+            create_response: true,
+            interrupt_response: true,
+          },
+        },
 
-      // Turn detection at session level
-      turn_detection: {
-        type: "server_vad",
-        threshold: 0.5,
-        prefix_padding_ms: 300,
-        silence_duration_ms: 350,
-        create_response: true,
-        interrupt_response: true,
+        output: {
+          voice: "marin",
+        },
       },
     },
   };
