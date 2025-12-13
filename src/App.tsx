@@ -91,9 +91,9 @@ function App() {
   const voiceClientRef = useRef<RealtimeVoiceClient | null>(null);
 
   // We'll store a ref to handleCommand so voice event handlers can call it safely.
-  const handleCommandRef = useRef<((text: string) => Promise<string | null>) | null>(
-    null
-  );
+  const handleCommandRef = useRef<
+    ((text: string) => Promise<string | null>) | null
+  >(null);
   const lastVoiceCommandAtRef = useRef<number>(0);
 
   // Helper: speak a final narration via Realtime *after* UI/Avatar are ready.
@@ -116,6 +116,24 @@ function App() {
     assistantSpeakingRef.current = true;
   };
 
+  // ✅ IMPORTANT: Only trigger handleCommand from *user final transcript* events.
+  const extractFinalUserTranscript = (evt: any): string | null => {
+    // Common Realtime event
+    if (typeof evt?.transcript === "string" && evt.transcript.trim()) {
+      return evt.transcript.trim();
+    }
+
+    // Some shapes attach transcript to the conversation item content
+    const t =
+      evt?.item?.content?.[0]?.transcript ??
+      evt?.item?.content?.transcript ??
+      null;
+
+    if (typeof t === "string" && t.trim()) return t.trim();
+
+    return null;
+  };
+
   const voiceClient = useMemo(() => {
     const client = new RealtimeVoiceClient({
       onStatus: setVoiceStatus,
@@ -127,23 +145,24 @@ function App() {
 
         // --- Track assistant speaking state (best-effort across event variants) ---
         if (
-          evtType.includes("response.created") ||
-          evtType.includes("response.output_audio.delta") ||
-          evtType.includes("response.output_audio_transcript.delta")
+          evtType === "response.created" ||
+          evtType === "response.output_audio.delta" ||
+          evtType === "response.output_audio_transcript.delta"
         ) {
           assistantSpeakingRef.current = true;
         }
         if (
-          evtType.includes("response.completed") ||
-          evtType.includes("response.done") ||
-          evtType.includes("response.cancelled") ||
-          evtType.includes("response.failed") ||
-          evtType.includes("error")
+          evtType === "response.completed" ||
+          evtType === "response.done" ||
+          evtType === "response.cancelled" ||
+          evtType === "response.failed" ||
+          evtType.startsWith("error")
         ) {
           assistantSpeakingRef.current = false;
         }
 
         // --- Show assistant transcript in the avatar bubble (optional) ---
+        // This is assistant output only; it must NEVER trigger handleCommand.
         if (
           evtType === "response.output_audio_transcript.delta" &&
           typeof evt.delta === "string"
@@ -157,50 +176,33 @@ function App() {
           setAvatarNarration(evt.transcript);
         }
 
-        // --- Drive the UI from user speech (input transcript) ---
+        // --- Drive the UI only from final user transcription completed ---
         const now = Date.now();
         const canTrigger =
           modeRef.current === "voice" &&
           !!handleCommandRef.current &&
           now - lastVoiceCommandAtRef.current > 900;
 
-        // Candidate transcript extraction (different shapes happen)
-        const candidateText: string | null =
-          (typeof evt?.transcript === "string" && evt.transcript) ||
-          (typeof evt?.text === "string" && evt.text) ||
-          (typeof evt?.item?.content?.[0]?.transcript === "string" &&
-            evt.item.content[0].transcript) ||
-          null;
+        // ✅ Strict gating: only these event types trigger UI commands
+        const isFinalUserTranscriptEvent =
+          evtType === "conversation.item.input_audio_transcription.completed" ||
+          evtType === "input_audio_transcription.completed" ||
+          evtType.endsWith(".input_audio_transcription.completed");
 
-        const isUserTranscriptEvent =
-          evtType.includes("input_audio_transcription") ||
-          evtType.includes("conversation.item") ||
-          evtType.includes("input_audio") ||
-          evtType.includes("user.transcript");
+        if (!canTrigger || !isFinalUserTranscriptEvent) return;
 
-        const looksFinal =
-          evtType.includes("completed") ||
-          evtType.includes("done") ||
-          evt?.final === true;
+        const candidateText = extractFinalUserTranscript(evt);
+        if (!candidateText) return;
 
-        if (
-          canTrigger &&
-          isUserTranscriptEvent &&
-          looksFinal &&
-          candidateText &&
-          candidateText.trim().length > 0
-        ) {
-          lastVoiceCommandAtRef.current = now;
-          setSystemPrompt(`Heard: "${candidateText}"`);
+        lastVoiceCommandAtRef.current = now;
+        setSystemPrompt(`Heard: "${candidateText}"`);
 
-          // ✅ IMPORTANT: wait for UI+avatar narration, then speak the final narration
-          void (async () => {
-            const narration = await handleCommandRef.current?.(candidateText);
-            if (typeof narration === "string" && narration.trim().length > 0) {
-              speakFinalNarration(narration.trim());
-            }
-          })();
-        }
+        void (async () => {
+          const narration = await handleCommandRef.current?.(candidateText);
+          if (typeof narration === "string" && narration.trim().length > 0) {
+            speakFinalNarration(narration.trim());
+          }
+        })();
       },
     });
 
@@ -238,9 +240,9 @@ function App() {
 
       await voiceClient.connect(data.clientSecret);
 
-      // Optional greeting (manual speak, since create_response is disabled)
+      // Manual greeting (since create_response is disabled)
       speakFinalNarration(
-        "Hello! You can say: show me your CV, show me projects, or loop the timeline."
+        "Hello! You can say: show the CV, show projects, or loop the timeline."
       );
     } catch (e: any) {
       setVoiceError(String(e?.message ?? e));
@@ -360,7 +362,7 @@ function App() {
   };
 
   // --- main command handler for chat input / voice ---
-  // ✅ returns the final narration text (so voice can speak it AFTER it exists)
+  // returns the final narration text (so voice can speak it AFTER it exists)
   const handleCommand = async (text: string): Promise<string | null> => {
     const trimmed = text.trim();
     if (!trimmed) return null;
@@ -384,7 +386,7 @@ function App() {
         voiceClient.cancelResponse();
         assistantSpeakingRef.current = false;
       }
-      return null; // don't speak anything new
+      return null;
     }
 
     setLoopMode(null);
@@ -767,7 +769,6 @@ function App() {
                     type="button"
                     className="avatar-talk-button"
                     onClick={() => {
-                      // Stop speaking (cancel) but keep the session alive
                       voiceClient.cancelResponse();
                       assistantSpeakingRef.current = false;
                       setSystemPrompt("Stopped voice output.");
