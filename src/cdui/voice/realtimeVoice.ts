@@ -35,6 +35,10 @@ export class RealtimeVoiceClient {
     return this.status === "connected" && !!this.pc;
   }
 
+  isConnecting() {
+    return this.status === "connecting";
+  }
+
   private ensureDcOpenPromise() {
     if (this.dcOpenPromise) return this.dcOpenPromise;
     this.dcOpenPromise = new Promise<void>((resolve) => {
@@ -44,6 +48,7 @@ export class RealtimeVoiceClient {
   }
 
   async connect(clientSecret: string) {
+    // prevent overlapping sessions
     if (this.pc) return;
 
     this.setStatus("connecting");
@@ -51,13 +56,10 @@ export class RealtimeVoiceClient {
     // 1) Setup peer connection
     this.pc = new RTCPeerConnection();
 
-    // Debug (super useful)
     this.pc.oniceconnectionstatechange = () => {
-      // eslint-disable-next-line no-console
       console.log("[webrtc] iceConnectionState:", this.pc?.iceConnectionState);
     };
     this.pc.onconnectionstatechange = () => {
-      // eslint-disable-next-line no-console
       console.log("[webrtc] connectionState:", this.pc?.connectionState);
     };
 
@@ -80,7 +82,6 @@ export class RealtimeVoiceClient {
     // 3) When remote audio arrives, play it
     this.pc.ontrack = async (e) => {
       const [stream] = e.streams;
-      // eslint-disable-next-line no-console
       console.log("[webrtc] ontrack: audio streams:", e.streams?.length ?? 0);
 
       if (stream && this.audioEl) {
@@ -88,10 +89,8 @@ export class RealtimeVoiceClient {
 
         try {
           await this.audioEl.play();
-          // eslint-disable-next-line no-console
           console.log("[webrtc] audioEl.play() ok");
         } catch (err) {
-          // eslint-disable-next-line no-console
           console.warn("[webrtc] audioEl.play() blocked:", err);
         }
       }
@@ -102,19 +101,16 @@ export class RealtimeVoiceClient {
     this.dc = this.pc.createDataChannel("oai-events");
 
     this.dc.onopen = () => {
-      // eslint-disable-next-line no-console
       console.log("[webrtc] datachannel open");
       this.dcOpenResolve?.();
       this.dcOpenResolve = null;
     };
 
     this.dc.onclose = () => {
-      // eslint-disable-next-line no-console
       console.log("[webrtc] datachannel closed");
     };
 
     this.dc.onerror = (err) => {
-      // eslint-disable-next-line no-console
       console.error("[webrtc] datachannel error:", err);
     };
 
@@ -165,21 +161,32 @@ export class RealtimeVoiceClient {
     const answerSdp = await sdpResp.text();
     await this.pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
 
-    // ✅ CRITICAL FIX:
-    // Wait for the data channel to be open before reporting "connected".
-    // Otherwise, App.tsx may send response.create too early and it gets dropped.
+    // Wait for data channel open before reporting connected
     await this.dcOpenPromise;
 
     this.setStatus("connected");
   }
 
-  sendEvent(evt: any) {
+  sendEvent(evt: any): boolean {
     if (!this.dc || this.dc.readyState !== "open") {
-      // eslint-disable-next-line no-console
       console.warn("[realtime] sendEvent dropped (dc not open):", evt?.type);
-      return;
+      return false;
     }
-    this.dc.send(JSON.stringify(evt));
+    try {
+      this.dc.send(JSON.stringify(evt));
+      return true;
+    } catch (err) {
+      console.warn("[realtime] sendEvent failed:", err);
+      return false;
+    }
+  }
+
+  /**
+   * Hard-interrupt whatever the assistant is currently saying.
+   * Keeps the connection alive.
+   */
+  cancelResponse(): boolean {
+    return this.sendEvent({ type: "response.cancel" });
   }
 
   async disconnect() {

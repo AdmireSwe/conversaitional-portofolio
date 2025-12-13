@@ -64,6 +64,10 @@ function App() {
 
   // Interaction mode: before first choice we’re in "chooser"
   const [mode, setMode] = useState<InteractionMode>("chooser");
+  const modeRef = useRef<InteractionMode>("chooser");
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
 
   // Has the UI "woken up" and slid left / rendered main screen?
   const [hasActivatedUI, setHasActivatedUI] = useState(false);
@@ -81,6 +85,9 @@ function App() {
   const [voiceStatus, setVoiceStatus] = useState<RealtimeVoiceStatus>("idle");
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
+  // Tracks whether assistant is currently outputting audio (so we can cancel on new commands)
+  const assistantSpeakingRef = useRef<boolean>(false);
+
   const voiceClientRef = useRef<RealtimeVoiceClient | null>(null);
 
   // We'll store a ref to handleCommand so voice event handlers can call it safely.
@@ -90,35 +97,54 @@ function App() {
   const lastVoiceCommandAtRef = useRef<number>(0);
 
   const voiceClient = useMemo(() => {
-    // Create once per App lifecycle
     const client = new RealtimeVoiceClient({
       onStatus: setVoiceStatus,
       onEvent: (evt) => {
         // eslint-disable-next-line no-console
         console.log("[realtime evt]", evt);
 
-        // --- 1) Show assistant transcript in the avatar bubble (optional) ---
+        const evtType = typeof evt?.type === "string" ? evt.type : "";
+
+        // --- Track assistant speaking state (best-effort across event variants) ---
         if (
-          evt?.type === "response.output_audio_transcript.delta" &&
+          evtType.includes("response.created") ||
+          evtType.includes("response.output_audio.delta") ||
+          evtType.includes("response.output_audio_transcript.delta")
+        ) {
+          assistantSpeakingRef.current = true;
+        }
+        if (
+          evtType.includes("response.completed") ||
+          evtType.includes("response.done") ||
+          evtType.includes("response.cancelled") ||
+          evtType.includes("response.failed") ||
+          evtType.includes("error")
+        ) {
+          assistantSpeakingRef.current = false;
+        }
+
+        // --- Show assistant transcript in the avatar bubble (optional) ---
+        if (
+          evtType === "response.output_audio_transcript.delta" &&
           typeof evt.delta === "string"
         ) {
           setAvatarNarration((prev) => (prev ? prev + evt.delta : evt.delta));
         }
         if (
-          evt?.type === "response.output_audio_transcript.done" &&
+          evtType === "response.output_audio_transcript.done" &&
           typeof evt.transcript === "string"
         ) {
           setAvatarNarration(evt.transcript);
         }
 
-        // --- 2) Drive the UI from user speech ---
+        // --- Drive the UI from user speech (input transcript) ---
         const now = Date.now();
         const canTrigger =
-          mode === "voice" &&
+          modeRef.current === "voice" &&
           !!handleCommandRef.current &&
-          now - lastVoiceCommandAtRef.current > 900; // debounce
+          now - lastVoiceCommandAtRef.current > 900;
 
-        // Candidate transcript extraction (best-effort, backend/event-shape dependent)
+        // Candidate transcript extraction (different shapes happen)
         const candidateText: string | null =
           (typeof evt?.transcript === "string" && evt.transcript) ||
           (typeof evt?.text === "string" && evt.text) ||
@@ -126,17 +152,16 @@ function App() {
             evt.item.content[0].transcript) ||
           null;
 
-        const evtType = typeof evt?.type === "string" ? evt.type : "";
-
         const isUserTranscriptEvent =
           evtType.includes("input_audio_transcription") ||
           evtType.includes("conversation.item") ||
           evtType.includes("input_audio") ||
           evtType.includes("user.transcript");
 
-        // Only trigger on "completed"/"done" style events (avoid deltas spam)
         const looksFinal =
-          evtType.includes("completed") || evtType.includes("done") || evt?.final === true;
+          evtType.includes("completed") ||
+          evtType.includes("done") ||
+          evt?.final === true;
 
         if (
           canTrigger &&
@@ -146,7 +171,6 @@ function App() {
           candidateText.trim().length > 0
         ) {
           lastVoiceCommandAtRef.current = now;
-
           setSystemPrompt(`Heard: "${candidateText}"`);
           void handleCommandRef.current?.(candidateText);
         }
@@ -154,7 +178,7 @@ function App() {
     });
 
     return client;
-  }, [mode]);
+  }, []);
 
   useEffect(() => {
     voiceClientRef.current = voiceClient;
@@ -165,6 +189,9 @@ function App() {
   }, [voiceClient]);
 
   async function startVoice() {
+    // Prevent overlapping sessions
+    if (voiceClient.isConnected() || voiceClient.isConnecting()) return;
+
     setVoiceError(null);
     setAvatarNarration(null);
 
@@ -184,15 +211,14 @@ function App() {
 
       await voiceClient.connect(data.clientSecret);
 
-      // Force a greeting so you can immediately confirm audio works.
+      // Optional greeting (safe now that dc-open is awaited in connect())
       voiceClient.sendEvent({
-  type: "response.create",
-  response: {
-    instructions:
-      "Hello! I’m the portfolio avatar. You can say things like: show me your CV, show me projects, or loop the timeline.",
-  },
-});
-
+        type: "response.create",
+        response: {
+          instructions:
+            "Hello! You can say: show me your CV, show me projects, or loop the timeline.",
+        },
+      });
     } catch (e: any) {
       setVoiceError(String(e?.message ?? e));
       setVoiceStatus("error");
@@ -202,9 +228,10 @@ function App() {
   async function stopVoice() {
     setVoiceError(null);
     await voiceClient.disconnect();
+    assistantSpeakingRef.current = false;
   }
 
-  // ✅ SAFETY: if we leave voice mode, ensure we disconnect
+  // SAFETY: if we leave voice mode, ensure we disconnect
   useEffect(() => {
     if (mode !== "voice") {
       void stopVoice();
@@ -222,12 +249,7 @@ function App() {
     if (!loopMode || loopMode.kind !== "timeline") return;
 
     const { ids, index } = loopMode;
-    if (!ids.length) {
-      setLoopMode(null);
-      return;
-    }
-
-    if (index >= ids.length) {
+    if (!ids.length || index >= ids.length) {
       setLoopMode(null);
       return;
     }
@@ -267,9 +289,7 @@ function App() {
     const handle = window.setTimeout(() => {
       setLoopMode((prev) => {
         if (!prev || prev.kind !== "timeline") return prev;
-        if (prev.index >= prev.ids.length - 1) {
-          return null;
-        }
+        if (prev.index >= prev.ids.length - 1) return null;
         return { ...prev, index: prev.index + 1 };
       });
     }, 8000);
@@ -289,17 +309,55 @@ function App() {
     console.log("Unhandled action:", actionId);
   };
 
-  // --- main command handler for the chat input ---
+  const isStopPhrase = (s: string) => {
+    const t = s.trim().toLowerCase();
+    return (
+      t === "stop" ||
+      t === "cancel" ||
+      t === "halt" ||
+      t === "be quiet" ||
+      t === "shut up" ||
+      t === "silence"
+    );
+  };
+
+  const cancelVoiceOutputIfNeeded = () => {
+    if (modeRef.current !== "voice") return;
+    if (!voiceClient.isConnected()) return;
+
+    // If assistant is currently speaking, cancel its output now.
+    if (assistantSpeakingRef.current) {
+      voiceClient.cancelResponse();
+      assistantSpeakingRef.current = false;
+    }
+  };
+
+  // --- main command handler for chat input / voice ---
   const handleCommand = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
 
-    setLoopMode(null);
+    // First command: wake up UI
+    if (!hasActivatedUI) setHasActivatedUI(true);
 
-    // First real command: wake up the UI
-    if (!hasActivatedUI) {
-      setHasActivatedUI(true);
+    // If we're in voice mode and the assistant is talking: cancel before handling UI command
+    cancelVoiceOutputIfNeeded();
+
+    // Hard STOP: cancel voice response immediately (keep connection alive)
+    if (isStopPhrase(trimmed)) {
+      setLoopMode(null);
+      setAvatarThinking(false);
+      setAvatarNarration(null);
+      setSystemPrompt("Stopped.");
+
+      if (modeRef.current === "voice" && voiceClient.isConnected()) {
+        voiceClient.cancelResponse();
+        assistantSpeakingRef.current = false;
+      }
+      return;
     }
+
+    setLoopMode(null);
 
     const intent: Intent = parseIntent(trimmed);
     const current = currentScreen;
@@ -332,9 +390,7 @@ function App() {
       const newHistory = [...history, nextScreen];
 
       setHistory(newHistory);
-      setSystemPrompt(
-        "Showing CV overview. You can ask for details or another view."
-      );
+      setSystemPrompt("Showing CV overview. You can ask for details.");
       setChatInput("");
       setFocusTarget(null);
 
@@ -521,7 +577,6 @@ function App() {
     setShowChat(true);
   };
 
-  // Selecting voice starts voice immediately
   const handleSelectVoice = () => {
     setMode("voice");
     setShowChat(false);
@@ -558,15 +613,8 @@ function App() {
             )}
           </div>
 
-          {/* Voice status (only when in voice mode, to avoid clutter) */}
           {!isIntro && mode === "voice" && (
-            <div
-              style={{
-                marginTop: "0.75rem",
-                fontSize: "0.85rem",
-                color: "#334155",
-              }}
-            >
+            <div style={{ marginTop: "0.75rem", fontSize: "0.85rem", color: "#334155" }}>
               <div>
                 <strong>Voice:</strong> {voiceStatus}
               </div>
@@ -575,65 +623,46 @@ function App() {
                   {voiceError}
                 </div>
               )}
-
-              {/* If connected but silent: likely autoplay policy */}
               {voiceStatus === "connected" && (
                 <div style={{ marginTop: "0.35rem", color: "#64748b" }}>
-                  If you hear nothing: check your system output device + Chrome
-                  site sound, then try once more.
+                  Tip: say “stop” to interrupt voice output instantly.
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* INTRO chooser */}
         {isIntro ? (
           <div className="avatar-mode-chooser">
-            <button
-              type="button"
-              className="avatar-mode-button"
-              onClick={handleSelectVoice}
-            >
+            <button type="button" className="avatar-mode-button" onClick={handleSelectVoice}>
               🎙️ Talk to me
             </button>
-            <button
-              type="button"
-              className="avatar-mode-button"
-              onClick={handleSelectText}
-            >
+            <button type="button" className="avatar-mode-button" onClick={handleSelectText}>
               ✍️ Write to me
             </button>
           </div>
         ) : (
           <>
-            {/* Persona style toggle */}
             <div className="avatar-persona">
               <span className="avatar-persona-label">Avatar style</span>
               <div className="avatar-persona-buttons">
                 <button
                   type="button"
-                  className={`avatar-persona-button ${
-                    personaPref === "balanced" ? "is-active" : ""
-                  }`}
+                  className={`avatar-persona-button ${personaPref === "balanced" ? "is-active" : ""}`}
                   onClick={() => handlePersonaChange("balanced")}
                 >
                   Balanced
                 </button>
                 <button
                   type="button"
-                  className={`avatar-persona-button ${
-                    personaPref === "concise" ? "is-active" : ""
-                  }`}
+                  className={`avatar-persona-button ${personaPref === "concise" ? "is-active" : ""}`}
                   onClick={() => handlePersonaChange("concise")}
                 >
                   Concise
                 </button>
                 <button
                   type="button"
-                  className={`avatar-persona-button ${
-                    personaPref === "detailed" ? "is-active" : ""
-                  }`}
+                  className={`avatar-persona-button ${personaPref === "detailed" ? "is-active" : ""}`}
                   onClick={() => handlePersonaChange("detailed")}
                 >
                   Detailed
@@ -641,7 +670,6 @@ function App() {
               </div>
             </div>
 
-            {/* Mode switcher: show opposite */}
             <div className="avatar-mode-switcher">
               {mode === "voice" ? (
                 <button
@@ -662,7 +690,6 @@ function App() {
                   onClick={() => {
                     setMode("voice");
                     setShowChat(false);
-
                     if (!hasActivatedUI) setHasActivatedUI(true);
                     void startVoice();
                   }}
@@ -672,7 +699,6 @@ function App() {
               )}
             </div>
 
-            {/* Voice controls */}
             {mode === "voice" && (
               <div className="avatar-talk-wrapper">
                 {voiceStatus !== "connected" ? (
@@ -690,15 +716,19 @@ function App() {
                   <button
                     type="button"
                     className="avatar-talk-button"
-                    onClick={() => void stopVoice()}
+                    onClick={() => {
+                      // Stop speaking (cancel) but keep the session alive
+                      voiceClient.cancelResponse();
+                      assistantSpeakingRef.current = false;
+                      setSystemPrompt("Stopped voice output.");
+                    }}
                   >
-                    Stop voice conversation
+                    Stop speaking
                   </button>
                 )}
               </div>
             )}
 
-            {/* Text talk button only in text mode */}
             {mode === "text" && (
               <div className="avatar-talk-wrapper">
                 <button
@@ -714,18 +744,16 @@ function App() {
         )}
       </div>
 
-      {/* Main UI region */}
-      {hasActivatedUI && (
-        <div className="ui-region">
-          <div className="ui-fullscreen">
-            <ScreenRenderer
-              screen={currentScreen}
-              onAction={handleAction}
-              focusTarget={focusTarget}
-            />
-          </div>
+      {/* Main UI region – always rendered */}
+      <div className="ui-region">
+        <div className="ui-fullscreen">
+          <ScreenRenderer
+            screen={currentScreen}
+            onAction={handleAction}
+            focusTarget={focusTarget}
+          />
         </div>
-      )}
+      </div>
 
       {/* Chat dock (text mode only) */}
       <div

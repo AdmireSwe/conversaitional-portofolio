@@ -23,36 +23,42 @@ interface ScreenRendererProps {
  * ScreenRenderer
  *
  * Renders a ScreenDescription using simple semantic HTML + CSS classes.
- * - Uses flex layout direction from screen.layout ("column" or "row").
- * - Adds a subtle fade-in transition for the project list whenever
- *   the number of projects changes (useful for FILTER_PROJECTS).
- * - If focusTarget is provided, certain widgets (like timeline entries)
- *   will visually highlight and scroll into view.
  */
 export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
   screen,
   onAction,
   focusTarget,
 }) => {
+  const isRow = screen.layout === "row";
+
   return (
     <div
       className="cdui-screen"
       style={{
         display: "flex",
-        flexDirection: screen.layout === "row" ? "row" : "column",
+        flexDirection: isRow ? "row" : "column",
+        flexWrap: isRow ? "wrap" : "nowrap",
+        alignItems: "stretch",
         gap: "1.5rem",
         width: "100%",
+        minWidth: 0,
       }}
     >
-      {screen.widgets.map((widget, index) => (
-        <WidgetRenderer
-          key={index}
-          widget={widget}
-          screenId={screen.screenId}
-          onAction={onAction}
-          focusTarget={focusTarget}
-        />
-      ))}
+      {screen.widgets.map((widget: any, index: number) => {
+        const stableKey =
+          (typeof widget?.id === "string" && widget.id) ||
+          `${widget.type}-${index}`;
+
+        return (
+          <WidgetRenderer
+            key={stableKey}
+            widget={widget}
+            screenId={screen.screenId}
+            onAction={onAction}
+            focusTarget={focusTarget}
+          />
+        );
+      })}
     </div>
   );
 };
@@ -135,7 +141,7 @@ const TextBlock: React.FC<{ widget: TextWidget }> = ({ widget }) => {
   );
 };
 
-// ---------- PROJECT LIST (with subtle transition) ----------
+// ---------- PROJECT LIST ----------
 
 interface ProjectListBlockProps {
   widget: ProjectListWidget;
@@ -147,16 +153,27 @@ const ProjectListBlock: React.FC<ProjectListBlockProps> = ({
   widget,
   screenId,
 }) => {
-  // We key the list by screenId + project count so that when filtering changes
-  // the number of projects, React remounts this block and the CSS animation
-  // plays again (subtle fade-in).
-  const key = `${screenId}-projects-${widget.projects.length}`;
+  const idsSignature = widget.projects.map((p) => p.id).join("|");
+  const key = `${screenId}-projects-${idsSignature}`;
+
+  if (!widget.projects || widget.projects.length === 0) {
+    return (
+      <div className="info-card" key={key}>
+        <h2>No projects to show</h2>
+        <p>
+          Try: “show all projects”, “show backend projects”, or “show Java
+          projects”.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="project-list" key={key}>
       {widget.projects.map((proj) => (
         <div key={proj.id} className="project-card">
           <div className="project-title">{proj.name}</div>
+
           {proj.techStack && proj.techStack.length > 0 && (
             <div className="project-tech">
               {proj.techStack.map((t) => (
@@ -222,7 +239,7 @@ const TagListBlock: React.FC<{ widget: TagListWidget }> = ({ widget }) => {
   );
 };
 
-// ---------- TIMELINE (with focus + scroll) ----------
+// ---------- TIMELINE ----------
 
 const TimelineBlock: React.FC<{
   widget: TimelineWidget;
@@ -253,8 +270,7 @@ const TimelineBlock: React.FC<{
             <li
               key={entry.id}
               className={
-                "timeline-item" +
-                (isFocused ? " timeline-item-focused" : "")
+                "timeline-item" + (isFocused ? " timeline-item-focused" : "")
               }
               ref={isFocused ? focusedRef : null}
             >
@@ -264,9 +280,7 @@ const TimelineBlock: React.FC<{
                   <span className="timeline-period">{entry.period}</span>
                   <span className="timeline-title-text">{entry.title}</span>
                   {entry.subtitle && (
-                    <span className="timeline-subtitle">
-                      {entry.subtitle}
-                    </span>
+                    <span className="timeline-subtitle">{entry.subtitle}</span>
                   )}
                 </div>
                 {entry.description && (
@@ -300,9 +314,7 @@ const SkillMatrixBlock: React.FC<{ widget: SkillMatrixWidget }> = ({
                 </span>
               ))}
             </div>
-            <div className="skill-matrix-level">
-              {row.level ?? " "}
-            </div>
+            <div className="skill-matrix-level">{row.level ?? " "}</div>
           </div>
         ))}
       </div>

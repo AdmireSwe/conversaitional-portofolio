@@ -19,7 +19,7 @@ export const homeScreen: ScreenDescription = {
       title: "Interface driven by conversation",
       body:
         "This portfolio is not a static page. It is a runtime that compiles natural language into structured UI. " +
-        "You can ask for specific projects, switch views, or later even talk to a digital avatar that explains the work.",
+        "You can ask for specific projects, switch views, or talk to a digital avatar that explains the work.",
     },
     {
       type: "tag_list",
@@ -64,9 +64,7 @@ export const javaScreen: ScreenDescription = {
       variant: "h1",
       content: "Java-focused projects",
     },
-    projectListFromProjects(
-      allProjects.filter((p) => p.techStack.includes("Java"))
-    ),
+    projectListFromProjects(allProjects.filter((p) => p.techStack.includes("Java"))),
     {
       type: "info_card",
       title: "Why Java matters here",
@@ -93,10 +91,7 @@ export const backendScreen: ScreenDescription = {
     },
     projectListFromProjects(
       allProjects.filter(
-        (p) =>
-          p.kind === "backend" ||
-          p.kind === "fullstack" ||
-          p.kind === "cli"
+        (p) => p.kind === "backend" || p.kind === "fullstack" || p.kind === "cli"
       )
     ),
     {
@@ -121,19 +116,17 @@ export const cvScreen: ScreenDescription = {
     {
       type: "text",
       variant: "h1",
-      content: "CV download",
+      content: "CV overview",
     },
     {
       type: "text",
       variant: "body",
-      content:
-        "In a later version, a real CV PDF will be generated here on demand.",
+      content: "This view shows the current education/training timeline and core skill areas.",
     },
     {
       type: "timeline",
       title: "Education & training timeline",
       entries: [
-        // --- REAL ENTRIES ---
         {
           id: "wbs-ausbildung",
           title: "Umschulung – Fachinformatiker Anwendungsentwicklung",
@@ -155,56 +148,14 @@ export const cvScreen: ScreenDescription = {
           title: "Previous professional experience",
           period: "Before 2024",
           description:
-            "Background outside of IT that shapes soft skills, resilience and problem-solving – details will be in the full CV.",
-        },
-
-        // --- DUMMY ENTRIES FOR SCROLL TESTING ---
-        {
-          id: "dummy-1",
-          title: "Lorem Ipsum Foundation Studies",
-          subtitle: "Dolor Sit Amet Institute",
-          period: "2020 – 2021",
-          description:
-            "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus pharetra, velit vitae porttitor fermentum.",
+            "Background outside of IT that shapes soft skills, resilience and problem-solving. (Details live in the full CV.)",
         },
         {
-          id: "dummy-2",
-          title: "Advanced Lorem Certification",
-          subtitle: "Ipsum University",
-          period: "2019 – 2020",
+          id: "more-coming",
+          title: "More entries will be added",
+          period: "—",
           description:
-            "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium.",
-        },
-        {
-          id: "dummy-3",
-          title: "Dolor Sit Amet Bootcamp",
-          subtitle: "Amet Academy",
-          period: "2018 – 2019",
-          description:
-            "Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.",
-        },
-        {
-          id: "dummy-4",
-          title: "Placeholder Studies in Sit Amet Lorem",
-          period: "2017 – 2018",
-          description:
-            "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam.",
-        },
-        {
-          id: "dummy-5",
-          title: "Very Important Ipsum Research",
-          subtitle: "Lorem Research Center",
-          period: "2016 – 2017",
-          description:
-            "Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur.",
-        },
-        {
-          id: "dummy-6",
-          title: "Super Secret Ipsum Work",
-          subtitle: "Restricted Archives",
-          period: "2015 – 2016",
-          description:
-            "At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium.",
+            "This timeline will expand as the portfolio evolves (projects, internships, certifications).",
         },
       ],
     },

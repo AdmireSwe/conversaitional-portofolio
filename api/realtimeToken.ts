@@ -18,9 +18,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "Missing OPENAI_API_KEY env var" });
   }
 
-  // IMPORTANT:
-  // Realtime currently supports output_modalities as either ["audio"] OR ["text"] (not both).
-  // Your earlier 400 confirms this.
   const model =
     process.env.OPENAI_REALTIME_MODEL?.trim() || "gpt-realtime-2025-08-28";
 
@@ -28,22 +25,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     session: {
       type: "realtime",
       model,
+
+      // One modality only (audio)
       output_modalities: ["audio"],
+
       instructions:
-        "You are the Conversationally-Driven UI (CDUI) avatar for Admir’s portfolio. Speak naturally and conversationally. Keep responses short. If the user asks to see something (CV, projects, timeline), respond briefly and clearly.",
+        "You are the Conversationally-Driven UI (CDUI) voice avatar for Admir’s portfolio. " +
+        "Speak naturally and keep responses short. " +
+        "CRITICAL: Do NOT invent education, companies, dates, or projects. " +
+        "If you are unsure, say you don’t know and ask the user to open the relevant section. " +
+        "If the user says 'stop', immediately stop speaking.",
+
       audio: {
         output: { voice: "marin" },
-        input: {
-          // server VAD will detect turns and create responses automatically
-          turn_detection: {
-            type: "server_vad",
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 350,
-            create_response: true,
-            interrupt_response: true,
-          },
-        },
+      },
+
+      // IMPORTANT: to reliably get user transcript events
+      // (If this is unsupported in your account/model, OpenAI will reject the config—
+      // but in most setups this is what you want.)
+      input_audio_transcription: {
+        model: "gpt-4o-mini-transcribe",
+      },
+
+      // Turn detection at session level
+      turn_detection: {
+        type: "server_vad",
+        threshold: 0.5,
+        prefix_padding_ms: 300,
+        silence_duration_ms: 350,
+        create_response: true,
+        interrupt_response: true,
       },
     },
   };
