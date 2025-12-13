@@ -85,16 +85,36 @@ function App() {
   const [voiceStatus, setVoiceStatus] = useState<RealtimeVoiceStatus>("idle");
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
-  // Tracks whether assistant is currently outputting audio (so we can cancel on new commands)
+  // Tracks whether assistant is currently outputting audio
   const assistantSpeakingRef = useRef<boolean>(false);
 
   const voiceClientRef = useRef<RealtimeVoiceClient | null>(null);
 
   // We'll store a ref to handleCommand so voice event handlers can call it safely.
-  const handleCommandRef = useRef<((text: string) => Promise<void>) | null>(
+  const handleCommandRef = useRef<((text: string) => Promise<string | null>) | null>(
     null
   );
   const lastVoiceCommandAtRef = useRef<number>(0);
+
+  // Helper: speak a final narration via Realtime *after* UI/Avatar are ready.
+  const speakFinalNarration = (text: string) => {
+    if (modeRef.current !== "voice") return;
+    if (!voiceClient.isConnected()) return;
+
+    // Cancel any ongoing output first
+    voiceClient.cancelResponse();
+    assistantSpeakingRef.current = false;
+
+    voiceClient.sendEvent({
+      type: "response.create",
+      response: {
+        instructions: text,
+      },
+    });
+
+    // best-effort flag (events will also update it)
+    assistantSpeakingRef.current = true;
+  };
 
   const voiceClient = useMemo(() => {
     const client = new RealtimeVoiceClient({
@@ -172,7 +192,14 @@ function App() {
         ) {
           lastVoiceCommandAtRef.current = now;
           setSystemPrompt(`Heard: "${candidateText}"`);
-          void handleCommandRef.current?.(candidateText);
+
+          // ✅ IMPORTANT: wait for UI+avatar narration, then speak the final narration
+          void (async () => {
+            const narration = await handleCommandRef.current?.(candidateText);
+            if (typeof narration === "string" && narration.trim().length > 0) {
+              speakFinalNarration(narration.trim());
+            }
+          })();
         }
       },
     });
@@ -211,14 +238,10 @@ function App() {
 
       await voiceClient.connect(data.clientSecret);
 
-      // Optional greeting (safe now that dc-open is awaited in connect())
-      voiceClient.sendEvent({
-        type: "response.create",
-        response: {
-          instructions:
-            "Hello! You can say: show me your CV, show me projects, or loop the timeline.",
-        },
-      });
+      // Optional greeting (manual speak, since create_response is disabled)
+      speakFinalNarration(
+        "Hello! You can say: show me your CV, show me projects, or loop the timeline."
+      );
     } catch (e: any) {
       setVoiceError(String(e?.message ?? e));
       setVoiceStatus("error");
@@ -280,6 +303,11 @@ function App() {
 
         if (!cancelled && avatar?.narration) {
           setAvatarNarration(avatar.narration);
+
+          // If looping in voice mode, speak the narration after it is ready
+          if (modeRef.current === "voice" && voiceClient.isConnected()) {
+            speakFinalNarration(avatar.narration);
+          }
         }
       } finally {
         setAvatarThinking(false);
@@ -325,7 +353,6 @@ function App() {
     if (modeRef.current !== "voice") return;
     if (!voiceClient.isConnected()) return;
 
-    // If assistant is currently speaking, cancel its output now.
     if (assistantSpeakingRef.current) {
       voiceClient.cancelResponse();
       assistantSpeakingRef.current = false;
@@ -333,9 +360,12 @@ function App() {
   };
 
   // --- main command handler for chat input / voice ---
-  const handleCommand = async (text: string) => {
+  // ✅ returns the final narration text (so voice can speak it AFTER it exists)
+  const handleCommand = async (text: string): Promise<string | null> => {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed) return null;
+
+    let narrationToReturn: string | null = null;
 
     // First command: wake up UI
     if (!hasActivatedUI) setHasActivatedUI(true);
@@ -354,7 +384,7 @@ function App() {
         voiceClient.cancelResponse();
         assistantSpeakingRef.current = false;
       }
-      return;
+      return null; // don't speak anything new
     }
 
     setLoopMode(null);
@@ -377,12 +407,15 @@ function App() {
           systemPrompt: "User navigated back to previous view.",
           session,
         });
-        if (avatar?.narration) setAvatarNarration(avatar.narration);
+        if (avatar?.narration) {
+          narrationToReturn = avatar.narration;
+          setAvatarNarration(avatar.narration);
+        }
         if (avatar?.focusTarget) setFocusTarget(avatar.focusTarget);
       } finally {
         setAvatarThinking(false);
       }
-      return;
+      return narrationToReturn;
     }
 
     if (intent.type === "SHOW_CV") {
@@ -400,12 +433,15 @@ function App() {
           systemPrompt: "User requested the CV view.",
           session,
         });
-        if (avatar?.narration) setAvatarNarration(avatar.narration);
+        if (avatar?.narration) {
+          narrationToReturn = avatar.narration;
+          setAvatarNarration(avatar.narration);
+        }
         if (avatar?.focusTarget) setFocusTarget(avatar.focusTarget);
       } finally {
         setAvatarThinking(false);
       }
-      return;
+      return narrationToReturn;
     }
 
     if (intent.type === "SHOW_PROJECTS" || intent.type === "SHOW_ANY_PROJECTS") {
@@ -436,13 +472,16 @@ function App() {
           systemPrompt: compilerSystemPrompt,
           session,
         });
-        if (avatar?.narration) setAvatarNarration(avatar.narration);
+        if (avatar?.narration) {
+          narrationToReturn = avatar.narration;
+          setAvatarNarration(avatar.narration);
+        }
         if (avatar?.focusTarget) setFocusTarget(avatar.focusTarget);
       } finally {
         setAvatarThinking(false);
       }
 
-      return;
+      return narrationToReturn;
     }
 
     if (intent.type === "LOOP_TIMELINE") {
@@ -462,11 +501,14 @@ function App() {
               "User requested a loop-through, but there is no timeline on this screen.",
             session,
           });
-          if (avatar?.narration) setAvatarNarration(avatar.narration);
+          if (avatar?.narration) {
+            narrationToReturn = avatar.narration;
+            setAvatarNarration(avatar.narration);
+          }
         } finally {
           setAvatarThinking(false);
         }
-        return;
+        return narrationToReturn;
       }
 
       const ids = timelineWidget.entries.map((e) => e.id);
@@ -485,12 +527,15 @@ function App() {
             session,
           }
         );
-        if (avatar?.narration) setAvatarNarration(avatar.narration);
+        if (avatar?.narration) {
+          narrationToReturn = avatar.narration;
+          setAvatarNarration(avatar.narration);
+        }
       } finally {
         setAvatarThinking(false);
       }
 
-      return;
+      return narrationToReturn;
     }
 
     setAvatarThinking(true);
@@ -554,11 +599,16 @@ function App() {
         session,
       });
 
-      if (avatar?.narration) setAvatarNarration(avatar.narration);
+      if (avatar?.narration) {
+        narrationToReturn = avatar.narration;
+        setAvatarNarration(avatar.narration);
+      }
       if (avatar?.focusTarget) setFocusTarget(avatar.focusTarget);
     } finally {
       setAvatarThinking(false);
     }
+
+    return narrationToReturn;
   };
 
   // Keep the latest handleCommand in a ref for voice event handlers
@@ -744,7 +794,7 @@ function App() {
         )}
       </div>
 
-      {/* ✅ Main UI region – render ONLY after activation (prevents intro mixing) */}
+      {/* Main UI region – render ONLY after activation */}
       {!isIntro && (
         <div className="ui-region">
           <div className="ui-fullscreen">

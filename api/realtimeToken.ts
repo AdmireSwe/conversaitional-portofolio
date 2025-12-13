@@ -22,6 +22,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     process.env.OPENAI_REALTIME_MODEL?.trim() || "gpt-realtime-2025-08-28";
 
   // ✅ IMPORTANT: transcription + turn detection are under audio.input.*
+  // ✅ IMPORTANT: create_response is FALSE so the model does NOT speak immediately.
+  // We will trigger speech manually after UI+avatar narration are ready.
   const sessionConfig = {
     session: {
       type: "realtime",
@@ -32,6 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       instructions:
         "You are the Conversationally-Driven UI (CDUI) voice avatar for Admir’s portfolio. " +
+        "You MUST wait for a response.create event before speaking. " +
         "Speak naturally and keep responses short. " +
         "CRITICAL: Do NOT invent education, companies, dates, or projects. " +
         "If you are unsure, say you don’t know and ask the user to open the relevant section. " +
@@ -39,18 +42,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       audio: {
         input: {
-          // ✅ correct location for transcription
           transcription: {
             model: "gpt-4o-mini-transcribe",
           },
 
-          // ✅ correct location for turn detection
           turn_detection: {
             type: "server_vad",
             threshold: 0.5,
             prefix_padding_ms: 300,
             silence_duration_ms: 350,
-            create_response: true,
+
+            // ✅ KEY CHANGE:
+            // Do NOT let Realtime auto-generate speech immediately.
+            create_response: false,
+
+            // optional (kept): allows cancelling mid-output if we do speak
             interrupt_response: true,
           },
         },
