@@ -4,7 +4,10 @@ import {
   markScreen,
   getPersonaPreference,
   setPersonaPreference,
+  getPreferredLanguage,
+  setPreferredLanguage,
   type PersonaPreference,
+  type PreferredLanguage,
 } from "./cdui/session";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -56,81 +59,95 @@ function App() {
   const [avatarThinking, setAvatarThinking] = useState(false);
   const [showChat, setShowChat] = useState(false);
 
-  // Which UI element/section is currently in focus (for highlighting/scrolling)
   const [focusTarget, setFocusTarget] = useState<string | null>(null);
-
-  // Loop mode for automatic walkthroughs (e.g. timeline slideshow)
   const [loopMode, setLoopMode] = useState<LoopMode>(null);
 
-  // Interaction mode: before first choice we’re in "chooser"
   const [mode, setMode] = useState<InteractionMode>("chooser");
   const modeRef = useRef<InteractionMode>("chooser");
   useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
 
-  // Has the UI "woken up" and slid left / rendered main screen?
   const [hasActivatedUI, setHasActivatedUI] = useState(false);
+  const isIntro = !hasActivatedUI;
 
-  // Current persona preference derived from the session
+  // language selection UI (hidden by default)
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+
   const personaPref: PersonaPreference = getPersonaPreference(session);
+  const preferredLanguage: PreferredLanguage = getPreferredLanguage(session);
 
   const handlePersonaChange = (pref: PersonaPreference) => {
     setSession((prev) => setPersonaPreference(prev, pref));
   };
 
-  const isIntro = !hasActivatedUI;
+  const setLang = (lang: PreferredLanguage) => {
+    setSession((prev) => setPreferredLanguage(prev, lang));
+  };
 
   // --- voice (realtime) state ---
   const [voiceStatus, setVoiceStatus] = useState<RealtimeVoiceStatus>("idle");
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
-  // Tracks whether assistant is currently outputting audio
   const assistantSpeakingRef = useRef<boolean>(false);
-
   const voiceClientRef = useRef<RealtimeVoiceClient | null>(null);
 
-  // We'll store a ref to handleCommand so voice event handlers can call it safely.
   const handleCommandRef = useRef<
     ((text: string) => Promise<string | null>) | null
   >(null);
   const lastVoiceCommandAtRef = useRef<number>(0);
+
+  // Basic EN/DE fallback if user never set a preference
+  const detectEnDe = (t: string): "en" | "de" => {
+    const s = t.toLowerCase();
+    const hasUmlaut = /[äöüß]/i.test(t);
+    const hasGermanWords = /\b(und|oder|bitte|zeige|sprache|lebenslauf|zurück|projekt|projekte|ich|nicht)\b/i.test(
+      s
+    );
+    if (hasUmlaut || hasGermanWords) return "de";
+    return "en";
+  };
 
   // Helper: speak a final narration via Realtime *after* UI/Avatar are ready.
   const speakFinalNarration = (text: string) => {
     if (modeRef.current !== "voice") return;
     if (!voiceClient.isConnected()) return;
 
+    // Decide target language (only en/de)
+    const lang: "en" | "de" =
+      preferredLanguage ?? detectEnDe(text);
+
     // Cancel any ongoing output first
     voiceClient.cancelResponse();
     assistantSpeakingRef.current = false;
 
+    // Force language at the voice layer (prevents random language drift)
+    const forced =
+      lang === "de"
+        ? `Sprich ausschließlich Deutsch. ${text}`
+        : `Speak only English. ${text}`;
+
     voiceClient.sendEvent({
       type: "response.create",
       response: {
-        instructions: text,
+        instructions: forced,
       },
     });
 
-    // best-effort flag (events will also update it)
     assistantSpeakingRef.current = true;
   };
 
-  // ✅ IMPORTANT: Only trigger handleCommand from *user final transcript* events.
   const extractFinalUserTranscript = (evt: any): string | null => {
-    // Common Realtime event
     if (typeof evt?.transcript === "string" && evt.transcript.trim()) {
       return evt.transcript.trim();
     }
 
-    // Some shapes attach transcript to the conversation item content
     const t =
       evt?.item?.content?.[0]?.transcript ??
       evt?.item?.content?.transcript ??
       null;
 
     if (typeof t === "string" && t.trim()) return t.trim();
-
     return null;
   };
 
@@ -143,7 +160,6 @@ function App() {
 
         const evtType = typeof evt?.type === "string" ? evt.type : "";
 
-        // --- Track assistant speaking state (best-effort across event variants) ---
         if (
           evtType === "response.created" ||
           evtType === "response.output_audio.delta" ||
@@ -161,8 +177,7 @@ function App() {
           assistantSpeakingRef.current = false;
         }
 
-        // --- Show assistant transcript in the avatar bubble (optional) ---
-        // This is assistant output only; it must NEVER trigger handleCommand.
+        // assistant transcript bubble (never triggers commands)
         if (
           evtType === "response.output_audio_transcript.delta" &&
           typeof evt.delta === "string"
@@ -176,14 +191,12 @@ function App() {
           setAvatarNarration(evt.transcript);
         }
 
-        // --- Drive the UI only from final user transcription completed ---
         const now = Date.now();
         const canTrigger =
           modeRef.current === "voice" &&
           !!handleCommandRef.current &&
           now - lastVoiceCommandAtRef.current > 900;
 
-        // ✅ Strict gating: only these event types trigger UI commands
         const isFinalUserTranscriptEvent =
           evtType === "conversation.item.input_audio_transcription.completed" ||
           evtType === "input_audio_transcription.completed" ||
@@ -207,7 +220,7 @@ function App() {
     });
 
     return client;
-  }, []);
+  }, [preferredLanguage]);
 
   useEffect(() => {
     voiceClientRef.current = voiceClient;
@@ -218,7 +231,6 @@ function App() {
   }, [voiceClient]);
 
   async function startVoice() {
-    // Prevent overlapping sessions
     if (voiceClient.isConnected() || voiceClient.isConnecting()) return;
 
     setVoiceError(null);
@@ -240,10 +252,12 @@ function App() {
 
       await voiceClient.connect(data.clientSecret);
 
-      // Manual greeting (since create_response is disabled)
-      speakFinalNarration(
-        "Hello! You can say: show the CV, show projects, or loop the timeline."
-      );
+      const greeting =
+        (preferredLanguage ?? "en") === "de"
+          ? "Hallo! Du kannst sagen: zeig den Lebenslauf, zeig Projekte, oder Timeline durchgehen."
+          : "Hello! You can say: show the CV, show projects, or loop the timeline.";
+
+      speakFinalNarration(greeting);
     } catch (e: any) {
       setVoiceError(String(e?.message ?? e));
       setVoiceStatus("error");
@@ -256,7 +270,6 @@ function App() {
     assistantSpeakingRef.current = false;
   }
 
-  // SAFETY: if we leave voice mode, ensure we disconnect
   useEffect(() => {
     if (mode !== "voice") {
       void stopVoice();
@@ -264,12 +277,10 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  // Mark every visited screen in the session
   useEffect(() => {
     setSession((prev) => markScreen(prev, currentScreen.screenId));
   }, [currentScreen.screenId]);
 
-  // Drive the loop
   useEffect(() => {
     if (!loopMode || loopMode.kind !== "timeline") return;
 
@@ -305,8 +316,6 @@ function App() {
 
         if (!cancelled && avatar?.narration) {
           setAvatarNarration(avatar.narration);
-
-          // If looping in voice mode, speak the narration after it is ready
           if (modeRef.current === "voice" && voiceClient.isConnected()) {
             speakFinalNarration(avatar.narration);
           }
@@ -328,9 +337,8 @@ function App() {
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [loopMode, currentScreen, history, session]);
+  }, [loopMode, currentScreen, history, session, voiceClient]);
 
-  // --- button clicks from the CDUI screen ---
   const handleAction = (actionId: string) => {
     if (actionId === "download_cv") {
       alert("This will trigger a real CV download in a later version.");
@@ -343,8 +351,10 @@ function App() {
     const t = s.trim().toLowerCase();
     return (
       t === "stop" ||
+      t === "stopp" ||
       t === "cancel" ||
       t === "halt" ||
+      t === "ruhe" ||
       t === "be quiet" ||
       t === "shut up" ||
       t === "silence"
@@ -361,21 +371,16 @@ function App() {
     }
   };
 
-  // --- main command handler for chat input / voice ---
-  // returns the final narration text (so voice can speak it AFTER it exists)
   const handleCommand = async (text: string): Promise<string | null> => {
     const trimmed = text.trim();
     if (!trimmed) return null;
 
     let narrationToReturn: string | null = null;
 
-    // First command: wake up UI
     if (!hasActivatedUI) setHasActivatedUI(true);
 
-    // If we're in voice mode and the assistant is talking: cancel before handling UI command
     cancelVoiceOutputIfNeeded();
 
-    // Hard STOP: cancel voice response immediately (keep connection alive)
     if (isStopPhrase(trimmed)) {
       setLoopMode(null);
       setAvatarThinking(false);
@@ -393,6 +398,40 @@ function App() {
 
     const intent: Intent = parseIntent(trimmed);
     const current = currentScreen;
+
+    // --- Language UI intents ---
+    if (intent.type === "SHOW_LANGUAGE_SELECTION") {
+      setShowLanguagePicker(true);
+
+      const msg =
+        (preferredLanguage ?? "en") === "de"
+          ? "Sprachauswahl geöffnet. Wähle Englisch oder Deutsch."
+          : "Language selection opened. Choose English or German.";
+
+      setAvatarNarration(msg);
+      return msg;
+    }
+
+    if (intent.type === "SET_LANGUAGE_EN") {
+      setLang("en");
+      setShowLanguagePicker(false);
+
+      const msg = "Language set to English.";
+      setAvatarNarration(msg);
+      return msg;
+    }
+
+    if (intent.type === "SET_LANGUAGE_DE") {
+      setLang("de");
+      setShowLanguagePicker(false);
+
+      const msg = "Sprache auf Deutsch eingestellt.";
+      setAvatarNarration(msg);
+      return msg;
+    }
+
+    // Hide picker on any other normal command (keeps it “hidden by default”)
+    if (showLanguagePicker) setShowLanguagePicker(false);
 
     if (intent.type === "GO_BACK") {
       const prevHistory =
@@ -613,7 +652,6 @@ function App() {
     return narrationToReturn;
   };
 
-  // Keep the latest handleCommand in a ref for voice event handlers
   useEffect(() => {
     handleCommandRef.current = handleCommand;
   }, [handleCommand]);
@@ -623,7 +661,6 @@ function App() {
     void handleCommand(chatInput);
   };
 
-  // --- handlers for the initial mode choice ---
   const handleSelectText = () => {
     setMode("text");
     setShowChat(true);
@@ -639,7 +676,6 @@ function App() {
 
   return (
     <div className={`app-shell ${isIntro ? "app-intro" : "app-active"}`}>
-      {/* Avatar + controls column */}
       <div className="avatar-column">
         <div className="avatar-panel">
           <div className="avatar-header">
@@ -664,6 +700,33 @@ function App() {
               </span>
             )}
           </div>
+
+          {/* Hidden language picker (only shown after intent) */}
+          {!isIntro && showLanguagePicker && (
+            <div style={{ marginTop: "0.75rem" }}>
+              <div style={{ fontSize: "0.85rem", color: "#334155", marginBottom: "0.4rem" }}>
+                {(preferredLanguage ?? "en") === "de"
+                  ? "Sprache auswählen:"
+                  : "Choose language:"}
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="avatar-mode-switcher-button"
+                  onClick={() => void handleCommand("english")}
+                >
+                  English
+                </button>
+                <button
+                  type="button"
+                  className="avatar-mode-switcher-button"
+                  onClick={() => void handleCommand("deutsch")}
+                >
+                  Deutsch
+                </button>
+              </div>
+            </div>
+          )}
 
           {!isIntro && mode === "voice" && (
             <div style={{ marginTop: "0.75rem", fontSize: "0.85rem", color: "#334155" }}>
@@ -795,7 +858,6 @@ function App() {
         )}
       </div>
 
-      {/* Main UI region – render ONLY after activation */}
       {!isIntro && (
         <div className="ui-region">
           <div className="ui-fullscreen">
@@ -808,7 +870,6 @@ function App() {
         </div>
       )}
 
-      {/* Chat dock (text mode only) */}
       <div
         className={`chat-dock ${
           showChat && mode === "text" ? "chat-dock-visible" : "chat-dock-hidden"

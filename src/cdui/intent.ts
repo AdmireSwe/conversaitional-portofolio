@@ -6,6 +6,10 @@ export type Intent =
   | { type: "SHOW_ANY_PROJECTS" }
   | { type: "GO_BACK" }
   | { type: "LOOP_TIMELINE" }
+  // NEW: language UI
+  | { type: "SHOW_LANGUAGE_SELECTION" }
+  | { type: "SET_LANGUAGE_EN" }
+  | { type: "SET_LANGUAGE_DE" }
   | { type: "UNKNOWN"; reason?: string };
 
 function hasAny(text: string, candidates: string[]): boolean {
@@ -18,8 +22,27 @@ function hasAny(text: string, candidates: string[]): boolean {
  */
 export function parseIntent(input: string): Intent {
   const text = input.toLowerCase().trim();
-
   if (!text) return { type: "UNKNOWN", reason: "empty" };
+
+  // --- Language selection intents ---
+  const asksLanguageUi =
+    hasAny(text, [
+      "language selection",
+      "show language",
+      "choose language",
+      "select language",
+      "sprache",
+      "sprachwahl",
+      "sprache auswählen",
+      "sprache waehlen",
+      "sprachenauswahl",
+    ]) && !hasAny(text, ["english", "englisch", "german", "deutsch"]);
+
+  if (asksLanguageUi) return { type: "SHOW_LANGUAGE_SELECTION" };
+
+  // Direct language set
+  if (hasAny(text, ["english", "englisch"])) return { type: "SET_LANGUAGE_EN" };
+  if (hasAny(text, ["german", "deutsch"])) return { type: "SET_LANGUAGE_DE" };
 
   // --- CV / resume intent ---
   if (hasAny(text, ["cv", "curriculum", "lebenslauf", "resume"])) {
@@ -61,12 +84,7 @@ export function parseIntent(input: string): Intent {
   else if (hasAny(text, ["backend", "server", "api"])) tech = "backend";
   else if (hasAny(text, ["firebase", "fire base"])) tech = "firebase";
 
-  const mentionsProjects = hasAny(text, [
-    "project",
-    "projects",
-    "work",
-    "examples",
-  ]);
+  const mentionsProjects = hasAny(text, ["project", "projects", "work", "examples"]);
   const soundsLikeShow = hasAny(text, ["show", "see", "only", "filter"]);
 
   // --- Show projects intent ---
@@ -90,6 +108,5 @@ export function parseIntent(input: string): Intent {
     return { type: "SHOW_ANY_PROJECTS" };
   }
 
-  // Fallback
   return { type: "UNKNOWN", reason: "no match" };
 }

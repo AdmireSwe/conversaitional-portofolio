@@ -1,6 +1,8 @@
 // src/cdui/session.ts
 // Lightweight session memory stored locally (GDPR-friendly)
 
+export type PreferredLanguage = "en" | "de" | null;
+
 export interface SessionContext {
   visits: number;
   lastVisit: number;
@@ -8,6 +10,9 @@ export interface SessionContext {
   lastFocus: string | null;
   personaHints: string[];
   voiceEnabled: boolean;
+
+  // NEW: language preference for both text + voice outputs
+  preferredLanguage: PreferredLanguage;
 }
 
 export type PersonaPreference = "balanced" | "concise" | "detailed";
@@ -30,6 +35,7 @@ function freshSession(): SessionContext {
     lastFocus: null,
     personaHints: [],
     voiceEnabled: false,
+    preferredLanguage: null,
   };
 }
 
@@ -57,7 +63,12 @@ export function loadSession(): SessionContext {
       screensViewed: stored.screensViewed ?? {},
       lastFocus: stored.lastFocus ?? null,
       personaHints: stored.personaHints ?? [],
-      voiceEnabled: typeof stored.voiceEnabled === "boolean" ? stored.voiceEnabled : false,
+      voiceEnabled:
+        typeof stored.voiceEnabled === "boolean" ? stored.voiceEnabled : false,
+      preferredLanguage:
+        stored.preferredLanguage === "en" || stored.preferredLanguage === "de"
+          ? stored.preferredLanguage
+          : null,
     };
 
     saveSession(normalized);
@@ -75,7 +86,10 @@ export function loadSession(): SessionContext {
  * - lastFocus
  * - lastVisit
  */
-export function markScreen(ctx: SessionContext, screenId: string): SessionContext {
+export function markScreen(
+  ctx: SessionContext,
+  screenId: string
+): SessionContext {
   const count = ctx.screensViewed[screenId] ?? 0;
 
   const updated: SessionContext = {
@@ -125,6 +139,24 @@ export function setPersonaPreference(
     lastVisit: Date.now(),
   };
 
+  saveSession(updated);
+  return updated;
+}
+
+/** NEW: Preferred language helpers */
+export function getPreferredLanguage(ctx: SessionContext): PreferredLanguage {
+  return ctx.preferredLanguage ?? null;
+}
+
+export function setPreferredLanguage(
+  ctx: SessionContext,
+  lang: PreferredLanguage
+): SessionContext {
+  const updated: SessionContext = {
+    ...ctx,
+    preferredLanguage: lang,
+    lastVisit: Date.now(),
+  };
   saveSession(updated);
   return updated;
 }

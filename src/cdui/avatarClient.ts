@@ -9,17 +9,12 @@ export interface AvatarResponse {
   tone: "neutral" | "curious" | "excited" | "warning";
 }
 
-// What the frontend passes to the avatar route as “compiler context”
 interface CompilerContext {
   systemPrompt?: string;
   mutations?: ScreenMutation[];
-  session?: SessionContext; // per-visitor session info
+  session?: SessionContext;
 }
 
-/**
- * EXTRA: A compact, explicit fact-pack derived from screens.
- * This is meant to reduce hallucinations and make server-side enforcement easy.
- */
 interface FactsPack {
   ownerName: string;
   headline: string;
@@ -33,38 +28,25 @@ interface FactsPack {
     widgets?: Array<{
       type?: string;
       title?: string;
-      // timeline/projects/sections etc (best-effort, safe)
       items?: Array<Record<string, unknown>>;
     }>;
   }>;
-  // A plain text version that can be pasted into a system prompt on the backend.
   factsText: string;
 }
 
 interface AvatarRequestBody {
   text: string;
-
-  // Keep the original fields (backwards compatible with your /api/avatar handler)
   currentScreen: ScreenDescription;
   history: ScreenDescription[];
-
   compilerContext?: CompilerContext;
-
-  // You can extend this later with more structured portfolio info
   portfolioContext?: {
     ownerName: string;
     headline: string;
   };
-
-  // NEW: Fact pack + strict mode
   factsPack?: FactsPack;
   strictFactsOnly?: boolean;
 }
 
-/**
- * Safely pick only the fields we care about from a widget.
- * We do best-effort extraction without relying on exact widget shapes.
- */
 function summarizeWidget(widget: any) {
   const type = typeof widget?.type === "string" ? widget.type : undefined;
   const title =
@@ -74,10 +56,6 @@ function summarizeWidget(widget: any) {
       ? widget.label
       : undefined;
 
-  // Common patterns you likely have:
-  // - timeline: entries[]
-  // - projects: projects[] / items[] / cards[]
-  // - sections: sections[]
   const itemsCandidate =
     (Array.isArray(widget?.entries) && widget.entries) ||
     (Array.isArray(widget?.projects) && widget.projects) ||
@@ -88,16 +66,10 @@ function summarizeWidget(widget: any) {
 
   const items =
     itemsCandidate?.slice?.(0, 40)?.map?.((it: any) => {
-      // Keep only human-visible text-ish fields, to reduce token size.
       const out: Record<string, unknown> = {};
       for (const k of Object.keys(it ?? {})) {
         const v = (it as any)[k];
-        if (
-          typeof v === "string" ||
-          typeof v === "number" ||
-          typeof v === "boolean"
-        ) {
-          // prioritize likely “display” fields
+        if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
           if (
             k.toLowerCase().includes("title") ||
             k.toLowerCase().includes("name") ||
@@ -118,7 +90,6 @@ function summarizeWidget(widget: any) {
           }
         }
       }
-      // If we failed to pick anything, keep id/title if present
       if (Object.keys(out).length === 0) {
         if (typeof it?.id === "string") out.id = it.id;
         if (typeof it?.title === "string") out.title = it.title;
@@ -171,7 +142,6 @@ function buildFactsText(pack: FactsPack): string {
       lines.push(`  - widget type=${w.type ?? "?"}${w.title ? ` title=${w.title}` : ""}`);
       const items = w.items ?? [];
       if (items.length) {
-        // show first few items for context
         for (const it of items.slice(0, 10)) {
           lines.push(`    - ${JSON.stringify(it)}`);
         }
@@ -188,10 +158,7 @@ function buildFactsText(pack: FactsPack): string {
   return lines.join("\n");
 }
 
-function buildFactsPack(
-  currentScreen: ScreenDescription,
-  history: ScreenDescription[]
-): FactsPack {
+function buildFactsPack(currentScreen: ScreenDescription, history: ScreenDescription[]): FactsPack {
   const ownerName = "Admir Sabanovic";
   const headline = "Conversationally-Driven Portfolio (CDUI demo)";
 
@@ -216,10 +183,6 @@ function buildFactsPack(
   return packBase;
 }
 
-/**
- * Call the /api/avatar endpoint.
- * Returns an AvatarResponse or null on error.
- */
 export async function callAvatar(
   text: string,
   currentScreen: ScreenDescription,
@@ -239,7 +202,6 @@ export async function callAvatar(
       headline: factsPack.headline,
     },
 
-    // NEW: send facts pack and request strict mode
     factsPack,
     strictFactsOnly: true,
   };
@@ -258,7 +220,6 @@ export async function callAvatar(
 
     const data = (await res.json()) as Partial<AvatarResponse>;
 
-    // Normalise a bit in case backend missed fields
     return {
       narration: data.narration ?? "",
       intentSummary: data.intentSummary ?? "",
