@@ -4,21 +4,16 @@ import {
   markScreen,
   getPersonaPreference,
   setPersonaPreference,
-  getPreferredLanguage,
-  setPreferredLanguage,
+  setUILanguage,
+  showLanguageSelection,
   type PersonaPreference,
-  type PreferredLanguage,
 } from "./cdui/session";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 
 import { ScreenRenderer } from "./cdui/components/ScreenRenderer";
-import type {
-  ScreenDescription,
-  ScreenMutation,
-  TimelineWidget,
-} from "./cdui/types";
+import type { ScreenDescription, ScreenMutation, TimelineWidget } from "./cdui/types";
 import { parseIntent, type Intent } from "./cdui/intent";
 import { homeScreen, cvScreen } from "./cdui/screens";
 import { decideFromText } from "./cdui/ai";
@@ -34,17 +29,12 @@ import {
 const IS_PROD = import.meta.env.PROD;
 
 type LoopMode =
-  | {
-      kind: "timeline";
-      ids: string[];
-      index: number;
-    }
+  | { kind: "timeline"; ids: string[]; index: number }
   | null;
 
 type InteractionMode = "chooser" | "text" | "voice";
 
 function App() {
-  // --- session context (per visitor) ---
   const [session, setSession] = useState(() => loadSession());
 
   const [history, setHistory] = useState<ScreenDescription[]>([homeScreen]);
@@ -69,84 +59,44 @@ function App() {
   }, [mode]);
 
   const [hasActivatedUI, setHasActivatedUI] = useState(false);
-  const isIntro = !hasActivatedUI;
-
-  // language selection UI (hidden by default)
-  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
 
   const personaPref: PersonaPreference = getPersonaPreference(session);
-  const preferredLanguage: PreferredLanguage = getPreferredLanguage(session);
 
   const handlePersonaChange = (pref: PersonaPreference) => {
     setSession((prev) => setPersonaPreference(prev, pref));
   };
 
-  const setLang = (lang: PreferredLanguage) => {
-    setSession((prev) => setPreferredLanguage(prev, lang));
-  };
+  const isIntro = !hasActivatedUI;
 
-  // --- voice (realtime) state ---
   const [voiceStatus, setVoiceStatus] = useState<RealtimeVoiceStatus>("idle");
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
   const assistantSpeakingRef = useRef<boolean>(false);
+
   const voiceClientRef = useRef<RealtimeVoiceClient | null>(null);
 
-  const handleCommandRef = useRef<
-    ((text: string) => Promise<string | null>) | null
-  >(null);
+  const handleCommandRef = useRef<((text: string) => Promise<string | null>) | null>(null);
   const lastVoiceCommandAtRef = useRef<number>(0);
 
-  // Basic EN/DE fallback if user never set a preference
-  const detectEnDe = (t: string): "en" | "de" => {
-    const s = t.toLowerCase();
-    const hasUmlaut = /[äöüß]/i.test(t);
-    const hasGermanWords = /\b(und|oder|bitte|zeige|sprache|lebenslauf|zurück|projekt|projekte|ich|nicht)\b/i.test(
-      s
-    );
-    if (hasUmlaut || hasGermanWords) return "de";
-    return "en";
-  };
-
-  // Helper: speak a final narration via Realtime *after* UI/Avatar are ready.
   const speakFinalNarration = (text: string) => {
     if (modeRef.current !== "voice") return;
     if (!voiceClient.isConnected()) return;
 
-    // Decide target language (only en/de)
-    const lang: "en" | "de" =
-      preferredLanguage ?? detectEnDe(text);
-
-    // Cancel any ongoing output first
     voiceClient.cancelResponse();
     assistantSpeakingRef.current = false;
 
-    // Force language at the voice layer (prevents random language drift)
-    const forced =
-      lang === "de"
-        ? `Sprich ausschließlich Deutsch. ${text}`
-        : `Speak only English. ${text}`;
-
+    // We speak the final narration (already EN/DE), no extra prompting needed.
     voiceClient.sendEvent({
       type: "response.create",
-      response: {
-        instructions: forced,
-      },
+      response: { instructions: text },
     });
 
     assistantSpeakingRef.current = true;
   };
 
   const extractFinalUserTranscript = (evt: any): string | null => {
-    if (typeof evt?.transcript === "string" && evt.transcript.trim()) {
-      return evt.transcript.trim();
-    }
-
-    const t =
-      evt?.item?.content?.[0]?.transcript ??
-      evt?.item?.content?.transcript ??
-      null;
-
+    if (typeof evt?.transcript === "string" && evt.transcript.trim()) return evt.transcript.trim();
+    const t = evt?.item?.content?.[0]?.transcript ?? evt?.item?.content?.transcript ?? null;
     if (typeof t === "string" && t.trim()) return t.trim();
     return null;
   };
@@ -155,9 +105,7 @@ function App() {
     const client = new RealtimeVoiceClient({
       onStatus: setVoiceStatus,
       onEvent: (evt) => {
-        // eslint-disable-next-line no-console
         console.log("[realtime evt]", evt);
-
         const evtType = typeof evt?.type === "string" ? evt.type : "";
 
         if (
@@ -177,17 +125,10 @@ function App() {
           assistantSpeakingRef.current = false;
         }
 
-        // assistant transcript bubble (never triggers commands)
-        if (
-          evtType === "response.output_audio_transcript.delta" &&
-          typeof evt.delta === "string"
-        ) {
+        if (evtType === "response.output_audio_transcript.delta" && typeof evt.delta === "string") {
           setAvatarNarration((prev) => (prev ? prev + evt.delta : evt.delta));
         }
-        if (
-          evtType === "response.output_audio_transcript.done" &&
-          typeof evt.transcript === "string"
-        ) {
+        if (evtType === "response.output_audio_transcript.done" && typeof evt.transcript === "string") {
           setAvatarNarration(evt.transcript);
         }
 
@@ -220,7 +161,7 @@ function App() {
     });
 
     return client;
-  }, [preferredLanguage]);
+  }, []);
 
   useEffect(() => {
     voiceClientRef.current = voiceClient;
@@ -245,19 +186,17 @@ function App() {
 
       const data = await r.json();
       if (!r.ok || !data?.clientSecret) {
-        throw new Error(
-          `Failed to fetch realtime token: ${r.status} ${JSON.stringify(data)}`
-        );
+        throw new Error(`Failed to fetch realtime token: ${r.status} ${JSON.stringify(data)}`);
       }
 
       await voiceClient.connect(data.clientSecret);
 
-      const greeting =
-        (preferredLanguage ?? "en") === "de"
-          ? "Hallo! Du kannst sagen: zeig den Lebenslauf, zeig Projekte, oder Timeline durchgehen."
+      // greet in the current UI language
+      const greet =
+        session.uiLanguage === "de"
+          ? "Hallo! Du kannst sagen: zeig den Lebenslauf, zeig Projekte, oder geh die Timeline durch."
           : "Hello! You can say: show the CV, show projects, or loop the timeline.";
-
-      speakFinalNarration(greeting);
+      speakFinalNarration(greet);
     } catch (e: any) {
       setVoiceError(String(e?.message ?? e));
       setVoiceStatus("error");
@@ -271,9 +210,7 @@ function App() {
   }
 
   useEffect(() => {
-    if (mode !== "voice") {
-      void stopVoice();
-    }
+    if (mode !== "voice") void stopVoice();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
@@ -296,9 +233,9 @@ function App() {
     let cancelled = false;
 
     (async () => {
-      const timelineWidget = currentScreen.widgets.find(
-        (w) => w.type === "timeline"
-      ) as TimelineWidget | undefined;
+      const timelineWidget = currentScreen.widgets.find((w) => w.type === "timeline") as
+        | TimelineWidget
+        | undefined;
 
       const entry = timelineWidget?.entries.find((e) => e.id === currentId);
 
@@ -349,16 +286,7 @@ function App() {
 
   const isStopPhrase = (s: string) => {
     const t = s.trim().toLowerCase();
-    return (
-      t === "stop" ||
-      t === "stopp" ||
-      t === "cancel" ||
-      t === "halt" ||
-      t === "ruhe" ||
-      t === "be quiet" ||
-      t === "shut up" ||
-      t === "silence"
-    );
+    return t === "stop" || t === "cancel" || t === "halt" || t === "be quiet" || t === "shut up" || t === "silence";
   };
 
   const cancelVoiceOutputIfNeeded = () => {
@@ -397,45 +325,39 @@ function App() {
     setLoopMode(null);
 
     const intent: Intent = parseIntent(trimmed);
-    const current = currentScreen;
 
-    // --- Language UI intents ---
+    // ✅ Language picker (hidden until asked)
     if (intent.type === "SHOW_LANGUAGE_SELECTION") {
-      setShowLanguagePicker(true);
-
+      setSession((prev) => showLanguageSelection(prev, true));
       const msg =
-        (preferredLanguage ?? "en") === "de"
-          ? "Sprachauswahl geöffnet. Wähle Englisch oder Deutsch."
-          : "Language selection opened. Choose English or German.";
-
+        session.uiLanguage === "de"
+          ? "Sprachauswahl geöffnet. Wähle Deutsch oder English."
+          : "Language selection opened. Choose English or Deutsch.";
+      setSystemPrompt(msg);
       setAvatarNarration(msg);
       return msg;
     }
 
     if (intent.type === "SET_LANGUAGE_EN") {
-      setLang("en");
-      setShowLanguagePicker(false);
-
+      setSession((prev) => setUILanguage(showLanguageSelection(prev, false), "en"));
       const msg = "Language set to English.";
+      setSystemPrompt(msg);
       setAvatarNarration(msg);
       return msg;
     }
 
     if (intent.type === "SET_LANGUAGE_DE") {
-      setLang("de");
-      setShowLanguagePicker(false);
-
+      setSession((prev) => setUILanguage(showLanguageSelection(prev, false), "de"));
       const msg = "Sprache auf Deutsch eingestellt.";
+      setSystemPrompt(msg);
       setAvatarNarration(msg);
       return msg;
     }
 
-    // Hide picker on any other normal command (keeps it “hidden by default”)
-    if (showLanguagePicker) setShowLanguagePicker(false);
+    const current = currentScreen;
 
     if (intent.type === "GO_BACK") {
-      const prevHistory =
-        history.length > 1 ? history.slice(0, history.length - 1) : history;
+      const prevHistory = history.length > 1 ? history.slice(0, history.length - 1) : history;
 
       setHistory(prevHistory);
       setSystemPrompt("Went back to the previous view.");
@@ -526,9 +448,7 @@ function App() {
     }
 
     if (intent.type === "LOOP_TIMELINE") {
-      const timelineWidget = current.widgets.find(
-        (w) => w.type === "timeline"
-      ) as TimelineWidget | undefined;
+      const timelineWidget = current.widgets.find((w) => w.type === "timeline") as TimelineWidget | undefined;
 
       if (!timelineWidget || !timelineWidget.entries.length) {
         setSystemPrompt("There is no timeline on this view to loop through.");
@@ -538,8 +458,7 @@ function App() {
         setAvatarThinking(true);
         try {
           const avatar = await callAvatar(trimmed, current, history, {
-            systemPrompt:
-              "User requested a loop-through, but there is no timeline on this screen.",
+            systemPrompt: "User requested a loop-through, but there is no timeline on this screen.",
             session,
           });
           if (avatar?.narration) {
@@ -579,6 +498,7 @@ function App() {
       return narrationToReturn;
     }
 
+    // default path (brain/local + avatar)
     setAvatarThinking(true);
 
     let compilerSystemPrompt: string | undefined;
@@ -601,7 +521,6 @@ function App() {
       const brain = await callBrain(trimmed, current, history);
 
       if (!brain) {
-        console.warn("Brain returned null, falling back to local AI.");
         const result = decideFromText(trimmed, history);
 
         if (result.kind === "push") {
@@ -619,14 +538,10 @@ function App() {
         compilerMutations = mutations;
 
         let nextScreen = current;
-        for (const m of mutations) {
-          nextScreen = applyMutation(nextScreen, m);
-        }
+        for (const m of mutations) nextScreen = applyMutation(nextScreen, m);
         screenAfterCompiler = nextScreen;
 
-        if (nextScreen !== current) {
-          setHistory((prev) => [...prev, nextScreen]);
-        }
+        if (nextScreen !== current) setHistory((prev) => [...prev, nextScreen]);
         if (brain.systemPrompt) setSystemPrompt(brain.systemPrompt);
       }
     }
@@ -692,41 +607,41 @@ function App() {
             </div>
           </div>
 
+          {/* ✅ Hidden language picker */}
+          {session.showLanguagePicker && (
+            <div style={{ marginTop: "0.65rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="avatar-persona-button"
+                onClick={() => {
+                  setSession((prev) => setUILanguage(showLanguageSelection(prev, false), "en"));
+                  setAvatarNarration("Language set to English.");
+                  setSystemPrompt("Language set to English.");
+                }}
+              >
+                English
+              </button>
+              <button
+                type="button"
+                className="avatar-persona-button"
+                onClick={() => {
+                  setSession((prev) => setUILanguage(showLanguageSelection(prev, false), "de"));
+                  setAvatarNarration("Sprache auf Deutsch eingestellt.");
+                  setSystemPrompt("Sprache auf Deutsch eingestellt.");
+                }}
+              >
+                Deutsch
+              </button>
+            </div>
+          )}
+
           <div className="avatar-body">
             {avatarNarration ?? (
               <span>
-                I am the Conversationally-Driven UI (CDUI) avatar. Tell me what
-                you want to see, and I’ll help this interface adapt.
+                I am the Conversationally-Driven UI (CDUI) avatar. Tell me what you want to see, and I’ll help this interface adapt.
               </span>
             )}
           </div>
-
-          {/* Hidden language picker (only shown after intent) */}
-          {!isIntro && showLanguagePicker && (
-            <div style={{ marginTop: "0.75rem" }}>
-              <div style={{ fontSize: "0.85rem", color: "#334155", marginBottom: "0.4rem" }}>
-                {(preferredLanguage ?? "en") === "de"
-                  ? "Sprache auswählen:"
-                  : "Choose language:"}
-              </div>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  className="avatar-mode-switcher-button"
-                  onClick={() => void handleCommand("english")}
-                >
-                  English
-                </button>
-                <button
-                  type="button"
-                  className="avatar-mode-switcher-button"
-                  onClick={() => void handleCommand("deutsch")}
-                >
-                  Deutsch
-                </button>
-              </div>
-            </div>
-          )}
 
           {!isIntro && mode === "voice" && (
             <div style={{ marginTop: "0.75rem", fontSize: "0.85rem", color: "#334155" }}>
@@ -734,9 +649,7 @@ function App() {
                 <strong>Voice:</strong> {voiceStatus}
               </div>
               {voiceError && (
-                <div style={{ marginTop: "0.35rem", color: "#b91c1c" }}>
-                  {voiceError}
-                </div>
+                <div style={{ marginTop: "0.35rem", color: "#b91c1c" }}>{voiceError}</div>
               )}
               {voiceStatus === "connected" && (
                 <div style={{ marginTop: "0.35rem", color: "#64748b" }}>
@@ -845,11 +758,7 @@ function App() {
 
             {mode === "text" && (
               <div className="avatar-talk-wrapper">
-                <button
-                  type="button"
-                  className="avatar-talk-button"
-                  onClick={() => setShowChat(true)}
-                >
+                <button type="button" className="avatar-talk-button" onClick={() => setShowChat(true)}>
                   Talk to the interface
                 </button>
               </div>
@@ -861,20 +770,12 @@ function App() {
       {!isIntro && (
         <div className="ui-region">
           <div className="ui-fullscreen">
-            <ScreenRenderer
-              screen={currentScreen}
-              onAction={handleAction}
-              focusTarget={focusTarget}
-            />
+            <ScreenRenderer screen={currentScreen} onAction={handleAction} focusTarget={focusTarget} />
           </div>
         </div>
       )}
 
-      <div
-        className={`chat-dock ${
-          showChat && mode === "text" ? "chat-dock-visible" : "chat-dock-hidden"
-        }`}
-      >
+      <div className={`chat-dock ${showChat && mode === "text" ? "chat-dock-visible" : "chat-dock-hidden"}`}>
         <div className="chat-box">
           <p className="chat-label">Interface</p>
           <p className="chat-system">{systemPrompt}</p>

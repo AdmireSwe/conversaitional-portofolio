@@ -1,11 +1,7 @@
 // api/realtimeToken.ts
-// Creates a client-safe ephemeral token for OpenAI Realtime (speech-to-speech)
-
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-export const config = {
-  runtime: "nodejs",
-};
+export const config = { runtime: "nodejs" };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -14,51 +10,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: "Missing OPENAI_API_KEY env var" });
-  }
+  if (!apiKey) return res.status(500).json({ error: "Missing OPENAI_API_KEY env var" });
 
-  const model =
-    process.env.OPENAI_REALTIME_MODEL?.trim() || "gpt-realtime-2025-08-28";
+  const model = process.env.OPENAI_REALTIME_MODEL?.trim() || "gpt-realtime-2025-08-28";
 
   const sessionConfig = {
     session: {
       type: "realtime",
       model,
-
-      // audio only
       output_modalities: ["audio"],
 
       instructions:
-        "You are the Conversationally-Driven UI (CDUI) voice avatar for Admir’s portfolio. " +
-        "IMPORTANT: Only speak English or German. Never use any other language. " +
+        "You are the CDUI voice avatar for Admir’s portfolio. " +
+        "Allowed languages: ONLY English or German. " +
+        "Default to English unless the user speaks German. " +
         "You MUST wait for a response.create event before speaking. " +
-        "Speak naturally and keep responses short. " +
+        "Keep responses short. " +
         "CRITICAL: Do NOT invent education, companies, dates, or projects. " +
-        "If you are unsure, say you don’t know and ask the visitor to open the relevant section. " +
-        "If the user says 'stop', immediately stop speaking.",
+        "Never say you have your own CV or projects. Describe what is on screen. " +
+        "If the user says 'stop', stop speaking immediately.",
 
       audio: {
         input: {
-          transcription: {
-            model: "gpt-4o-mini-transcribe",
-          },
-
+          transcription: { model: "gpt-4o-mini-transcribe" },
           turn_detection: {
             type: "server_vad",
             threshold: 0.5,
             prefix_padding_ms: 300,
             silence_duration_ms: 350,
-
-            // prevent auto-speech
             create_response: false,
             interrupt_response: true,
           },
         },
-
-        output: {
-          voice: "marin",
-        },
+        output: { voice: "marin" },
       },
     },
   };
@@ -66,34 +50,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const r = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify(sessionConfig),
     });
 
     const data = (await r.json().catch(() => null)) as any;
 
     if (!r.ok) {
-      return res.status(r.status).json({
-        error: "Failed to create client secret",
-        details: data ?? null,
-      });
+      return res.status(r.status).json({ error: "Failed to create client secret", details: data ?? null });
     }
 
     const clientSecret = data?.value;
     if (!clientSecret || typeof clientSecret !== "string") {
-      return res.status(500).json({
-        error: "Unexpected response shape from OpenAI",
-        details: data ?? null,
-      });
+      return res.status(500).json({ error: "Unexpected response shape from OpenAI", details: data ?? null });
     }
 
     return res.status(200).json({ clientSecret });
   } catch (err: any) {
-    return res
-      .status(500)
-      .json({ error: "Unexpected error", details: String(err) });
+    return res.status(500).json({ error: "Unexpected error", details: String(err) });
   }
 }
+

@@ -1,7 +1,7 @@
 // src/cdui/session.ts
 // Lightweight session memory stored locally (GDPR-friendly)
 
-export type PreferredLanguage = "en" | "de" | null;
+export type UILanguage = "en" | "de";
 
 export interface SessionContext {
   visits: number;
@@ -11,8 +11,9 @@ export interface SessionContext {
   personaHints: string[];
   voiceEnabled: boolean;
 
-  // NEW: language preference for both text + voice outputs
-  preferredLanguage: PreferredLanguage;
+  // NEW: language preference (only EN/DE)
+  uiLanguage: UILanguage; // default "en"
+  showLanguagePicker: boolean; // hidden until asked
 }
 
 export type PersonaPreference = "balanced" | "concise" | "detailed";
@@ -23,7 +24,7 @@ function saveSession(ctx: SessionContext) {
   try {
     localStorage.setItem(KEY, JSON.stringify(ctx));
   } catch {
-    // ignore storage errors (e.g. disabled storage)
+    // ignore storage errors
   }
 }
 
@@ -35,13 +36,14 @@ function freshSession(): SessionContext {
     lastFocus: null,
     personaHints: [],
     voiceEnabled: false,
-    preferredLanguage: null,
+
+    uiLanguage: "en",
+    showLanguagePicker: false,
   };
 }
 
 /**
- * Load the session from localStorage and
- * increment the visit counter on every load.
+ * Load the session from localStorage and increment visits.
  */
 export function loadSession(): SessionContext {
   try {
@@ -63,12 +65,10 @@ export function loadSession(): SessionContext {
       screensViewed: stored.screensViewed ?? {},
       lastFocus: stored.lastFocus ?? null,
       personaHints: stored.personaHints ?? [],
-      voiceEnabled:
-        typeof stored.voiceEnabled === "boolean" ? stored.voiceEnabled : false,
-      preferredLanguage:
-        stored.preferredLanguage === "en" || stored.preferredLanguage === "de"
-          ? stored.preferredLanguage
-          : null,
+      voiceEnabled: typeof stored.voiceEnabled === "boolean" ? stored.voiceEnabled : false,
+
+      uiLanguage: stored.uiLanguage === "de" ? "de" : "en",
+      showLanguagePicker: typeof stored.showLanguagePicker === "boolean" ? stored.showLanguagePicker : false,
     };
 
     saveSession(normalized);
@@ -80,16 +80,7 @@ export function loadSession(): SessionContext {
   }
 }
 
-/**
- * Mark that a screen has been viewed. This updates:
- * - screensViewed[screenId]
- * - lastFocus
- * - lastVisit
- */
-export function markScreen(
-  ctx: SessionContext,
-  screenId: string
-): SessionContext {
+export function markScreen(ctx: SessionContext, screenId: string): SessionContext {
   const count = ctx.screensViewed[screenId] ?? 0;
 
   const updated: SessionContext = {
@@ -106,19 +97,12 @@ export function markScreen(
   return updated;
 }
 
-/**
- * Map personaHints → a single preference flag for the UI.
- */
 export function getPersonaPreference(ctx: SessionContext): PersonaPreference {
   if (ctx.personaHints.includes("pref_concise")) return "concise";
   if (ctx.personaHints.includes("pref_detailed")) return "detailed";
   return "balanced";
 }
 
-/**
- * Update personaHints based on a selected preference.
- * We keep other non-pref_* hints, but ensure only one pref_* entry exists.
- */
 export function setPersonaPreference(
   ctx: SessionContext,
   pref: PersonaPreference
@@ -126,12 +110,8 @@ export function setPersonaPreference(
   const baseHints = ctx.personaHints.filter((h) => !h.startsWith("pref_"));
 
   let newHints = baseHints;
-
-  if (pref === "concise") {
-    newHints = [...baseHints, "pref_concise"];
-  } else if (pref === "detailed") {
-    newHints = [...baseHints, "pref_detailed"];
-  }
+  if (pref === "concise") newHints = [...baseHints, "pref_concise"];
+  else if (pref === "detailed") newHints = [...baseHints, "pref_detailed"];
 
   const updated: SessionContext = {
     ...ctx,
@@ -143,18 +123,21 @@ export function setPersonaPreference(
   return updated;
 }
 
-/** NEW: Preferred language helpers */
-export function getPreferredLanguage(ctx: SessionContext): PreferredLanguage {
-  return ctx.preferredLanguage ?? null;
-}
-
-export function setPreferredLanguage(
-  ctx: SessionContext,
-  lang: PreferredLanguage
-): SessionContext {
+// NEW: language controls
+export function setUILanguage(ctx: SessionContext, lang: UILanguage): SessionContext {
   const updated: SessionContext = {
     ...ctx,
-    preferredLanguage: lang,
+    uiLanguage: lang,
+    lastVisit: Date.now(),
+  };
+  saveSession(updated);
+  return updated;
+}
+
+export function showLanguageSelection(ctx: SessionContext, show: boolean): SessionContext {
+  const updated: SessionContext = {
+    ...ctx,
+    showLanguagePicker: show,
     lastVisit: Date.now(),
   };
   saveSession(updated);

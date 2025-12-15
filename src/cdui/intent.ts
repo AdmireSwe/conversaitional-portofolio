@@ -1,3 +1,4 @@
+// src/cdui/intent.ts
 // CDUI Intent Model & Parser v1
 
 export type Intent =
@@ -6,7 +7,6 @@ export type Intent =
   | { type: "SHOW_ANY_PROJECTS" }
   | { type: "GO_BACK" }
   | { type: "LOOP_TIMELINE" }
-  // NEW: language UI
   | { type: "SHOW_LANGUAGE_SELECTION" }
   | { type: "SET_LANGUAGE_EN" }
   | { type: "SET_LANGUAGE_DE" }
@@ -16,40 +16,51 @@ function hasAny(text: string, candidates: string[]): boolean {
   return candidates.some((word) => text.includes(word));
 }
 
-/**
- * Turn raw user text into a structured intent object.
- * This is the "brain" between natural language and UI.
- */
 export function parseIntent(input: string): Intent {
   const text = input.toLowerCase().trim();
   if (!text) return { type: "UNKNOWN", reason: "empty" };
 
-  // --- Language selection intents ---
-  const asksLanguageUi =
+  // --- Language selection (hidden UI) ---
+  if (
     hasAny(text, [
+      "language",
       "language selection",
-      "show language",
       "choose language",
       "select language",
       "sprache",
       "sprachwahl",
       "sprache auswählen",
       "sprache waehlen",
-      "sprachenauswahl",
-    ]) && !hasAny(text, ["english", "englisch", "german", "deutsch"]);
+    ])
+  ) {
+    return { type: "SHOW_LANGUAGE_SELECTION" };
+  }
 
-  if (asksLanguageUi) return { type: "SHOW_LANGUAGE_SELECTION" };
+  // explicit set language
+  if (
+    text === "english" ||
+    text === "set english" ||
+    text.includes("switch to english")
+  ) {
+    return { type: "SET_LANGUAGE_EN" };
+  }
 
-  // Direct language set
-  if (hasAny(text, ["english", "englisch"])) return { type: "SET_LANGUAGE_EN" };
-  if (hasAny(text, ["german", "deutsch"])) return { type: "SET_LANGUAGE_DE" };
+  if (
+    text === "deutsch" ||
+    text === "german" ||
+    text === "auf deutsch" ||
+    text.includes("switch to german") ||
+    text.includes("auf deutsch umstellen")
+  ) {
+    return { type: "SET_LANGUAGE_DE" };
+  }
 
-  // --- CV / resume intent ---
+  // --- CV intent ---
   if (hasAny(text, ["cv", "curriculum", "lebenslauf", "resume"])) {
     return { type: "SHOW_CV" };
   }
 
-  // --- Loop-through intent (timeline slideshow) ---
+  // --- Loop timeline ---
   if (
     hasAny(text, [
       "loop through",
@@ -66,7 +77,7 @@ export function parseIntent(input: string): Intent {
     return { type: "LOOP_TIMELINE" };
   }
 
-  // --- Go back intent (tolerant) ---
+  // --- Go back ---
   if (
     text === "back" ||
     text === "go back" ||
@@ -77,22 +88,19 @@ export function parseIntent(input: string): Intent {
     return { type: "GO_BACK" };
   }
 
-  // --- Try to detect tech filters ---
+  // --- Tech filters ---
   let tech: string | undefined;
-
   if (hasAny(text, ["java"])) tech = "java";
   else if (hasAny(text, ["backend", "server", "api"])) tech = "backend";
   else if (hasAny(text, ["firebase", "fire base"])) tech = "firebase";
 
   const mentionsProjects = hasAny(text, ["project", "projects", "work", "examples"]);
-  const soundsLikeShow = hasAny(text, ["show", "see", "only", "filter"]);
+  const soundsLikeShow = hasAny(text, ["show", "see", "only", "filter", "zeige", "nur", "filtern"]);
 
-  // --- Show projects intent ---
   if (mentionsProjects || (soundsLikeShow && tech)) {
     return { type: "SHOW_PROJECTS", tech };
   }
 
-  // --- Show something else / next thing ---
   if (
     hasAny(text, [
       "something else",
@@ -103,6 +111,9 @@ export function parseIntent(input: string): Intent {
       "next",
       "next project",
       "next portfolio item",
+      "etwas anderes",
+      "mehr projekte",
+      "nächstes",
     ])
   ) {
     return { type: "SHOW_ANY_PROJECTS" };
